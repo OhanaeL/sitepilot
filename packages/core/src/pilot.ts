@@ -3,6 +3,7 @@ import { ACTION_TOOLS, resolveBuiltinTools, type ActionToolName, type BuiltinToo
 import { scanAmbient, scanContext, type ScanOptions } from "./dom";
 import { getEvents, installEventsBuffer } from "./events";
 import { buildSystemPrompt, type Hints, type PromptContext, type PromptOptions, type ScreenContext } from "./prompt";
+import { getManifest, loadManifest, setManifest, type PilotManifest } from "./manifest";
 import { mergeStrings, type PilotStrings, type PilotStringsOverride } from "./strings";
 import {
   buildToolSpecs,
@@ -50,6 +51,8 @@ export interface PilotOptions {
   promptOptions?: Omit<PromptOptions, "system" | "hints">;
   /** Hidden per-element guidance by label, merged with `data-pilot-hint`. In server mode, set `prompt.hints` on the server instead. */
   hints?: Hints;
+  /** Site-wide config: selectors → labels/hints/areas, plus `hints` and `systemPrompt`. An object or a URL to fetch. */
+  manifest?: PilotManifest | string;
   /** Who is using the page. Rendered into the prompt; `id` also rides as the OpenAI `user` field. */
   user?: Getter<PilotUser | null | undefined>;
   /** Per-turn app facts to add to the prompt, e.g. `() => \`Plan: ${plan}. Cart items: ${n}.\``. */
@@ -85,6 +88,8 @@ export interface Pilot {
   clearHighlight(): void;
   getState(): PilotState;
   subscribe(listener: () => void): () => void;
+  /** Resolves once a URL manifest has loaded (immediately otherwise). `send` waits on it. */
+  ready: Promise<void>;
   /** Every tool installed (built-in + custom + plugins), for consent UIs. */
   availableTools(): readonly PilotTool[];
   /** The wire history (what the model sees), for persistence. */
@@ -145,7 +150,28 @@ export function createPilot(options: PilotOptions): Pilot {
   const tools = (): readonly PilotTool[] => [...fixedTools, ...(resolve(options.tools) ?? [])];
   const briefs = plugins.map((p) => p.brief).filter((b): b is string => !!b);
   const strings = mergeStrings(options.strings);
-  const promptOptions: PromptOptions = { ...options.promptOptions, system: options.systemPrompt, hints: options.hints };
+
+  let manifestError: string | null = null;
+  const ready: Promise<void> = options.manifest
+    ? loadManifest(options.manifest).then(setManifest, (err) => {
+        manifestError = `manifest: ${err instanceof Error ? err.message : String(err)}`;
+        set({ error: manifestError });
+      })
+    : Promise.resolve();
+
+  const hints = (): Hints | undefined => {
+    const fromManifest = getManifest()?.hints;
+    const own = options.hints;
+    if (!fromManifest) return own;
+    if (!own) return fromManifest;
+    if (typeof own === "function") return (e) => [fromManifest[e.key], own(e)].filter(Boolean).join(" ") || undefined;
+    return { ...fromManifest, ...own };
+  };
+  const promptOptions = (): PromptOptions => ({
+    ...options.promptOptions,
+    system: options.systemPrompt ?? getManifest()?.systemPrompt,
+    hints: hints(),
+  });
 
   let state: PilotState = {
     messages: [],
@@ -192,7 +218,9 @@ export function createPilot(options: PilotOptions): Pilot {
     screen: collectScreen,
     scan: options.scan,
     strings,
-    hints: options.hints,
+    get hints() {
+      return hints();
+    },
     get enabledTools() {
       return state.enabledTools;
     },
@@ -230,19 +258,20 @@ export function createPilot(options: PilotOptions): Pilot {
       return;
     }
 
+    await ready;
     abort = new AbortController();
     const { signal } = abort;
     push("user", trimmed);
     history = stripEphemeralMedia(history, strings.screenshotOmitted);
     record({ role: "user", content: trimmed });
-    set({ status: "thinking", error: null });
+    set({ status: "thinking", error: manifestError });
 
     try {
       let round = 0;
       for (; round < maxRounds; round++) {
         const ctx = promptContext();
         const serverMode = options.prompt === "server";
-        const system: ChatMessage[] = serverMode ? [] : [{ role: "system", content: buildSystemPrompt(ctx, promptOptions) }];
+        const system: ChatMessage[] = serverMode ? [] : [{ role: "system", content: buildSystemPrompt(ctx, promptOptions()) }];
         const userId = typeof ctx.user?.["id"] === "string" ? ctx.user["id"] : undefined;
         const reply = await options.transport.complete(
           {
@@ -323,5 +352,6 @@ export function createPilot(options: PilotOptions): Pilot {
     },
     collectScreen,
     strings,
+    ready,
   };
 }

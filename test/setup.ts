@@ -1,6 +1,10 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 
+// happy-dom swaps in browser-flavoured fetch primitives (its Request drops
+// forbidden headers such as Origin); the server package needs Bun's real ones.
+const native = { fetch, Request, Response, Headers };
 GlobalRegistrator.register();
+Object.assign(globalThis, native);
 
 const box = { x: 0, y: 0, top: 0, left: 0, right: 100, bottom: 20, width: 100, height: 20, toJSON: () => ({}) };
 HTMLElement.prototype.getBoundingClientRect = function () {

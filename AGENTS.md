@@ -7,6 +7,7 @@ Personal OSS project (OhanaeL). Bun workspaces monorepo; **not** a General-Magic
 - `packages/react` — provider/hook/widget. Peer-depends on core + react.
 - `packages/server` — fetch-standard proxy handler. No runtime deps.
 - `packages/computer` — optional computer-use plugin (frame + coordinate actions).
+- `examples/cloudflare-worker` — the static-site backend: `createPilotHandler` on a Worker with `allowOrigins`.
 - `examples/vite-react` — demo; the proxy is mounted inside Vite's dev server (`vite.config.ts`). Needs a `.env` (see `.env.example`); never commit it.
 
 ## Commands
@@ -24,6 +25,9 @@ bun run dev:example
 - **Tool consent is enforced in `pilot.ts`, not in tools**: actions must be in `enabledTools`; utilities need at least one enabled action.
 - **`tools`/`user`/`context` are getters read every round**; the React provider feeds them through a ref so the pilot is created once per `transport`/`plugins`/`prompt`/`systemPrompt` and still sees live state.
 - **Two prompt modes.** `prompt: "client"` builds the system message in the browser; `"server"` sends a `sitepilot` context field and no system message, and `@sitepilot/server` renders it (`cleanContext` re-validates it — treat it as untrusted). `@sitepilot/core/prompt` is the pure subpath the server imports; keep it free of DOM/driver.js imports.
+- **Manifest rules are virtual**: `manifest.ts` holds module-level rules; `dom.ts`/`events.ts` consult them beside the attributes. Never stamp attributes onto matched nodes. One invalid selector would poison the combined selector, so `setManifest` drops those up front.
+- **Never wait on `requestAnimationFrame` alone** — background tabs pause it; `scrollIntoViewSettled` keeps a `setTimeout` backstop.
+- **Test preload restores Bun's native `Request`/`Response`/`Headers`/`fetch`** after happy-dom registers; happy-dom's `Request` drops forbidden headers like `Origin`, which the server's CORS tests need.
 - **Tool attachments are turn-scoped** (`stripEphemeralMedia`). Do not persist images across user turns.
 - **driver.js CSS is inlined** at build (`loader: {".css": "text"}` + `noExternal`) and injected once by `ensureStyles()`. Consumers need no CSS import.
 - **Widget z-index is 10002**: above driver's overlay (10000) and click ring (10001), below its popover (1e9), so captions render over the panel.

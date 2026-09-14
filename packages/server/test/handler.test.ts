@@ -166,3 +166,63 @@ describe("server-side hints", () => {
     expect(sys).toMatch(/- Plain: Plain$/);
   });
 });
+
+describe("CORS / allowOrigins", () => {
+  const body = { messages: [{ role: "user", content: "hi" }] };
+
+  test("same-origin and no-Origin requests pass without CORS headers", async () => {
+    const up = upstream();
+    const handler = createPilotHandler({ apiKey: "k", model: "m", fetch: up.fetch });
+    const res = await handler(post(body, { origin: "http://x" }));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("access-control-allow-origin")).toBeNull();
+  });
+
+  test("cross-origin is rejected unless allow-listed; preflight answered; headers added", async () => {
+    const up = upstream();
+    const handler = createPilotHandler({ apiKey: "k", model: "m", fetch: up.fetch, allowOrigins: ["https://ohanael.github.io"] });
+    expect((await handler(post(body, { origin: "https://evil.example" }))).status).toBe(403);
+    const pre = await handler(new Request("http://x/api/pilot", { method: "OPTIONS", headers: { origin: "https://ohanael.github.io" } }));
+    expect(pre.status).toBe(204);
+    expect(pre.headers.get("access-control-allow-origin")).toBe("https://ohanael.github.io");
+    expect(pre.headers.get("access-control-allow-methods")).toContain("POST");
+    const res = await handler(post(body, { origin: "https://ohanael.github.io" }));
+    expect(res.status).toBe(200);
+    expect(res.headers.get("access-control-allow-origin")).toBe("https://ohanael.github.io");
+    expect(await res.json()).toEqual({ choices: [{ message: { content: "hi" } }] });
+    expect(up.calls).toHaveLength(1);
+  });
+
+  test("no allowOrigins means any cross-origin caller is refused", async () => {
+    const up = upstream();
+    const handler = createPilotHandler({ apiKey: "k", model: "m", fetch: up.fetch });
+    expect((await handler(post(body, { origin: "https://ohanael.github.io" }))).status).toBe(403);
+    expect(up.calls).toHaveLength(0);
+  });
+});
+
+describe("toNodeListener", () => {
+  test("rebuilds the URL from the Host header so same-origin checks see the port", async () => {
+    const { toNodeListener } = await import("../src");
+    const seen: string[] = [];
+    const listener = toNodeListener(async (req) => {
+      seen.push(req.url, req.headers.get("origin") ?? "");
+      return new Response("ok", { status: 200 });
+    });
+    const handlers: Record<string, (c?: unknown) => void> = {};
+    const req = {
+      method: "POST",
+      url: "/api/pilot",
+      headers: { host: "localhost:5179", origin: "http://localhost:5179", "content-type": "application/json" },
+      on: (ev: string, cb: (c?: unknown) => void) => { handlers[ev] = cb; },
+    };
+    const res = { statusCode: 0, headers: {} as Record<string, string>, body: "", setHeader(k: string, v: string) { this.headers[k] = v; }, end(b?: string) { this.body = b ?? ""; } };
+    const done = listener(req, res);
+    handlers["data"]!(new TextEncoder().encode("{}"));
+    handlers["end"]!();
+    await done;
+    expect(seen).toEqual(["http://localhost:5179/api/pilot", "http://localhost:5179"]);
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toBe("ok");
+  });
+});

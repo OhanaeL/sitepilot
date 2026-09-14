@@ -1,4 +1,5 @@
 import { ANY_TIER_SELECTOR, TIER_ATTR, type Tier } from "./attrs";
+import { manifestRuleFor, manifestSelector, renderLabel, safeMatches } from "./manifest";
 
 export type EventType = "click" | "open" | "input";
 
@@ -45,11 +46,20 @@ function tierOf(el: Element): { tier: Tier; key: string } | null {
     const v = el.getAttribute(TIER_ATTR[tier])?.trim();
     if (v) return { tier, key: v };
   }
-  return null;
+  const rule = manifestRuleFor(el);
+  return rule ? { tier: rule.tier, key: renderLabel(rule.label, el) } : null;
 }
 
+const isMarked = (el: Element): boolean => {
+  const extra = manifestSelector();
+  return el.matches(ANY_TIER_SELECTOR) || (!!extra && safeMatches(el, extra));
+};
+
 function markedFrom(target: EventTarget | null): Element | null {
-  return target instanceof Element ? target.closest(ANY_TIER_SELECTOR) : null;
+  for (let el = target instanceof Element ? target : null; el; el = el.parentElement) {
+    if (isMarked(el)) return el;
+  }
+  return null;
 }
 
 function push(type: EventType, el: Element): void {
@@ -85,7 +95,7 @@ function onInput(e: Event): void {
 
 function markedDialog(node: Element): Element | null {
   const dialog = node.matches(DIALOG_SELECTOR) ? node : node.querySelector(DIALOG_SELECTOR);
-  return dialog?.matches(ANY_TIER_SELECTOR) ? dialog : null;
+  return dialog && isMarked(dialog) ? dialog : null;
 }
 
 function onMutations(mutations: MutationRecord[]): void {
