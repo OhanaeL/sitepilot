@@ -4,16 +4,22 @@ import { renderMarkdown } from "./markdown";
 import { usePilot, useSitepilot } from "./provider";
 
 const STYLE_ID = "sitepilot-widget-css";
+const CLOSE_MS = 180;
 
 const CSS = `
 .sp-root{--sp-accent:var(--sitepilot-accent,#2563eb);--sp-on-accent:var(--sitepilot-on-accent,#fff);--sp-bg:var(--sitepilot-bg,#fff);--sp-fg:var(--sitepilot-fg,#111827);--sp-muted:var(--sitepilot-muted,#6b7280);--sp-border:var(--sitepilot-border,#e5e7eb);--sp-bubble:var(--sitepilot-bubble,#f3f4f6);--sp-radius:var(--sitepilot-radius,18px);--sp-font:var(--sitepilot-font,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif);position:fixed;right:20px;bottom:20px;z-index:10002;font:14px/1.5 var(--sp-font);color:var(--sp-fg);-webkit-font-smoothing:antialiased}
 .sp-root *{box-sizing:border-box}
-.sp-launch{display:grid;place-items:center;width:52px;height:52px;border-radius:50%;border:0;background:var(--sp-accent);color:var(--sp-on-accent);cursor:pointer;box-shadow:0 10px 30px rgba(0,0,0,.22);transition:transform .15s ease,box-shadow .15s ease}
+.sp-launch{display:grid;place-items:center;width:52px;height:52px;border-radius:50%;border:0;background:var(--sp-accent);color:var(--sp-on-accent);cursor:pointer;box-shadow:0 10px 30px rgba(0,0,0,.22);transition:transform .15s ease,box-shadow .15s ease;animation:sp-pop .22s cubic-bezier(.2,.8,.2,1)}
+@keyframes sp-pop{from{opacity:0;transform:scale(.5)}to{opacity:1;transform:none}}
 .sp-launch:hover{transform:translateY(-1px);box-shadow:0 14px 34px rgba(0,0,0,.26)}
 .sp-launch svg{width:24px;height:24px}
-.sp-panel{width:min(400px,calc(100vw - 32px));height:min(640px,calc(100vh - 48px));display:flex;flex-direction:column;background:var(--sp-bg);border:1px solid var(--sp-border);border-radius:var(--sp-radius);box-shadow:0 24px 64px rgba(0,0,0,.22),0 2px 8px rgba(0,0,0,.08);overflow:hidden;animation:sp-in .18s ease-out}
-@keyframes sp-in{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:none}}
-@media (prefers-reduced-motion:reduce){.sp-panel{animation:none}.sp-dot{animation:none}}
+.sp-panel{width:min(400px,calc(100vw - 32px));height:min(640px,calc(100vh - 48px));display:flex;flex-direction:column;background:var(--sp-bg);border:1px solid var(--sp-border);border-radius:var(--sp-radius);box-shadow:0 24px 64px rgba(0,0,0,.22),0 2px 8px rgba(0,0,0,.08);overflow:hidden;transform-origin:calc(100% - 26px) calc(100% - 26px);animation:sp-in .26s cubic-bezier(.2,.8,.2,1)}
+.sp-panel.is-closing{animation:sp-out .18s cubic-bezier(.4,0,1,1) forwards;pointer-events:none}
+@keyframes sp-in{from{opacity:0;transform:translateY(16px) scale(.9)}to{opacity:1;transform:none}}
+@keyframes sp-out{from{opacity:1;transform:none}to{opacity:0;transform:translateY(16px) scale(.9)}}
+.sp-msg,.sp-activity,.sp-typing{animation:sp-rise .2s ease-out}
+@keyframes sp-rise{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.sp-panel,.sp-panel.is-closing,.sp-launch,.sp-msg,.sp-activity,.sp-typing,.sp-dot{animation:none}}
 .sp-head{display:flex;align-items:center;gap:10px;padding:12px 12px 12px 14px;border-bottom:1px solid var(--sp-border)}
 .sp-avatar{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;background:var(--sp-accent);color:var(--sp-on-accent);flex:none}
 .sp-avatar svg{width:18px;height:18px}
@@ -140,6 +146,7 @@ export function SitepilotWidget({
   const pilot = usePilot();
   const { messages, status, error, enabledTools, send, stop, reset, setTools } = useSitepilot();
   const [open, setOpen] = useState(defaultOpen);
+  const [closing, setClosing] = useState(false);
   const [draft, setDraft] = useState("");
   const logRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -153,6 +160,14 @@ export function SitepilotWidget({
   useEffect(() => {
     if (open) inputRef.current?.focus();
   }, [open]);
+  useEffect(() => {
+    if (!closing) return;
+    const t = setTimeout(() => {
+      setOpen(false);
+      setClosing(false);
+    }, CLOSE_MS);
+    return () => clearTimeout(t);
+  }, [closing]);
 
   const onSubmit = (e: FormEvent) => {
     e.preventDefault();
@@ -174,7 +189,7 @@ export function SitepilotWidget({
           {icon ?? Icon.spark}
         </button>
       ) : (
-        <div className="sp-panel" role="dialog" aria-label={title}>
+        <div className={closing ? "sp-panel is-closing" : "sp-panel"} role="dialog" aria-label={title}>
           <div className="sp-head">
             <div className="sp-avatar">{icon ?? Icon.spark}</div>
             <div className="sp-titles">
@@ -187,7 +202,7 @@ export function SitepilotWidget({
             <button type="button" className="sp-icon" title="New conversation" aria-label="New conversation" onClick={reset}>
               {Icon.reset}
             </button>
-            <button type="button" className="sp-icon" aria-label="Close" onClick={() => setOpen(false)}>
+            <button type="button" className="sp-icon" aria-label="Close" onClick={() => setClosing(true)}>
               {Icon.close}
             </button>
           </div>
