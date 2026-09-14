@@ -1,0 +1,28 @@
+{
+  "name": "@sitepilot/server",
+  "version": "0.1.0",
+  "description": "A fetch-standard chat-completions proxy for @sitepilot/core: keeps your LLM key server-side, pins the model, validates the body.",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0"
+  },
+  "repository": { "type": "git", "url": "https://github.com/OhanaeL/sitepilot", "directory": "packages/server" },
+  "keywords": ["ai", "agent", "copilot", "openai", "proxy", "chat-completions"]
+}

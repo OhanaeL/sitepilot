@@ -1,0 +1,18 @@
+{
+  "name": "sitepilot-monorepo",
+  "private": true,
+  "workspaces": ["packages/*", "examples/*"],
+  "scripts": {
+    "build": "bun run --filter './packages/*' build",
+    "typecheck": "bun run --filter './packages/*' typecheck",
+    "test": "bun test",
+    "dev:example": "bun run --filter sitepilot-example-vite-react dev"
+  },
+  "devDependencies": {
+    "@happy-dom/global-registrator": "20.14.5",
+    "@types/bun": "^1.3.0",
+    "happy-dom": "^20.14.5",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.0"
+  }
+}
