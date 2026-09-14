@@ -13,9 +13,17 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
+    },
+    "./prompt": {
+      "types": "./dist/prompt.d.ts",
+      "import": "./dist/prompt.js",
+      "require": "./dist/prompt.cjs"
     }
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc -p tsconfig.json"
@@ -23,6 +31,19 @@
   "dependencies": {
     "driver.js": "^1.8.0"
   },
-  "repository": { "type": "git", "url": "https://github.com/OhanaeL/sitepilot", "directory": "packages/core" },
-  "keywords": ["ai", "agent", "copilot", "assistant", "dom", "llm", "tool-calling", "in-app"]
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/OhanaeL/sitepilot",
+    "directory": "packages/core"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "copilot",
+    "assistant",
+    "dom",
+    "llm",
+    "tool-calling",
+    "in-app"
+  ]
 }

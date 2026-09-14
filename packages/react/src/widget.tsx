@@ -52,6 +52,8 @@ export interface SitepilotWidgetProps {
   defaultOpen?: boolean;
   /** Show the per-tool consent toggles. Default true. */
   showToolToggles?: boolean;
+  /** Labels for the consent toggles, by tool name. Merged over the built-in labels. */
+  toolLabels?: Record<string, string>;
 }
 
 export function SitepilotWidget({
@@ -60,7 +62,9 @@ export function SitepilotWidget({
   welcome = "Hi! Ask me where anything is on this page and I can point at it, or do it for you.",
   defaultOpen = false,
   showToolToggles = true,
+  toolLabels,
 }: SitepilotWidgetProps) {
+  const labels = { ...TOOL_LABELS, ...toolLabels };
   const pilot = usePilot();
   const { messages, status, error, enabledTools, send, stop, reset, setTools } = useSitepilot();
   const [open, setOpen] = useState(defaultOpen);
@@ -108,7 +112,7 @@ export function SitepilotWidget({
                 return (
                   <label key={name}>
                     <input type="checkbox" checked={enabledTools.includes(name)} onChange={() => toggle(name)} />
-                    {TOOL_LABELS[name] ?? name}
+                    {labels[name] ?? name}
                   </label>
                 );
               })}

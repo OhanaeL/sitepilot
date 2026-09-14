@@ -63,7 +63,11 @@
       "name": "@sitepilot/server",
       "version": "0.1.0",
       "devDependencies": {
+        "@sitepilot/core": "workspace:*",
         "@types/node": "^24.0.0",
+      },
+      "peerDependencies": {
+        "@sitepilot/core": "workspace:*",
       },
     },
   },

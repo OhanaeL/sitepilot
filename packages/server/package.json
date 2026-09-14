@@ -15,14 +15,32 @@
       "require": "./dist/index.cjs"
     }
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc -p tsconfig.json"
   },
   "devDependencies": {
-    "@types/node": "^24.0.0"
+    "@types/node": "^24.0.0",
+    "@sitepilot/core": "workspace:*"
   },
-  "repository": { "type": "git", "url": "https://github.com/OhanaeL/sitepilot", "directory": "packages/server" },
-  "keywords": ["ai", "agent", "copilot", "openai", "proxy", "chat-completions"]
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/OhanaeL/sitepilot",
+    "directory": "packages/server"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "copilot",
+    "openai",
+    "proxy",
+    "chat-completions"
+  ],
+  "peerDependencies": {
+    "@sitepilot/core": "workspace:*"
+  }
 }

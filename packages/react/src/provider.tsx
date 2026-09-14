@@ -1,5 +1,7 @@
 import { createPilot, type Pilot, type PilotOptions, type PilotState } from "@sitepilot/core";
-import { createContext, useContext, useMemo, useSyncExternalStore, type ReactNode } from "react";
+import { createContext, useContext, useMemo, useRef, useSyncExternalStore, type ReactNode } from "react";
+
+const read = <T,>(v: T | (() => T) | undefined): T | undefined => (typeof v === "function" ? (v as () => T)() : v);
 
 const PilotContext = createContext<Pilot | null>(null);
 
@@ -10,12 +12,22 @@ export interface SitepilotProviderProps extends PilotOptions {
 }
 
 export function SitepilotProvider({ children, pilot: given, ...options }: SitepilotProviderProps) {
-  const { transport, plugins, systemPrompt } = options;
+  const latest = useRef(options);
+  latest.current = options;
+  const { transport, plugins, prompt, systemPrompt } = options;
   const pilot = useMemo(
-    () => given ?? createPilot(options),
-    // A new pilot means a new conversation; only the identity-bearing inputs should trigger that.
+    () =>
+      given ??
+      createPilot({
+        ...options,
+        tools: () => read(latest.current.tools),
+        user: () => read(latest.current.user),
+        context: () => read(latest.current.context),
+      }),
+    // A new pilot means a new conversation, so only identity-bearing inputs rebuild it;
+    // tools/user/context are read through the ref every round instead.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [given, transport, plugins, systemPrompt],
+    [given, transport, plugins, prompt, systemPrompt],
   );
   return <PilotContext.Provider value={pilot}>{children}</PilotContext.Provider>;
 }
@@ -31,7 +43,7 @@ export function usePilotState(): PilotState {
   return useSyncExternalStore(pilot.subscribe, pilot.getState, pilot.getState);
 }
 
-export function useSitepilot(): PilotState & Pick<Pilot, "send" | "stop" | "reset" | "setTools" | "clearHighlight"> {
+export function useSitepilot(): PilotState & Pick<Pilot, "send" | "stop" | "reset" | "setTools" | "clearHighlight" | "getHistory" | "loadHistory"> {
   const pilot = usePilot();
   const state = usePilotState();
   return {
@@ -41,5 +53,7 @@ export function useSitepilot(): PilotState & Pick<Pilot, "send" | "stop" | "rese
     reset: pilot.reset,
     setTools: pilot.setTools,
     clearHighlight: pilot.clearHighlight,
+    getHistory: pilot.getHistory,
+    loadHistory: pilot.loadHistory,
   };
 }

@@ -91,3 +91,58 @@ describe("createPilotHandler", () => {
     expect(await res.json()).toEqual({ error: { message: "quota" } });
   });
 });
+
+describe("server prompt mode", () => {
+  const context = {
+    screen: { path: "/projects", ambient: [{ key: "Create project button", description: "Create project button", tier: "ambient" }], events: [], area: { topic: "projects", description: "The list" } },
+    user: { id: "u1", name: "Ada" },
+    extra: "Plan: pro",
+    briefs: ["PLUGIN BRIEF"],
+    enabledTools: ["click_element"],
+  };
+
+  test("renders the sitepilot context server-side, strips it from the upstream body, keeps wording off the client", async () => {
+    const up = upstream();
+    const handler = createPilotHandler({
+      apiKey: "k",
+      model: "m",
+      fetch: up.fetch,
+      systemPrompt: "ALWAYS FIRST",
+      prompt: { system: "SECRET BASE", extra: (ctx, req) => `Session: ${req.headers.get("x-session")} / ${ctx.user?.["name"]}` },
+      toolDescriptions: { click_element: "SECRET CLICK DESC" },
+    });
+    const res = await handler(
+      post(
+        {
+          messages: [{ role: "user", content: "hi" }],
+          tools: [{ type: "function", function: { name: "click_element", description: "client desc", parameters: { type: "object" } } }],
+          user: "u1",
+          sitepilot: context,
+        },
+        { "x-session": "s42" },
+      ),
+    );
+    expect(res.status).toBe(200);
+    const body = up.calls[0]!.body;
+    expect(body["sitepilot"]).toBeUndefined();
+    expect(body["user"]).toBe("u1");
+    const messages = body["messages"] as Array<{ role: string; content: string }>;
+    expect(messages[0]).toEqual({ role: "system", content: "ALWAYS FIRST" });
+    expect(messages[1]!.role).toBe("system");
+    expect(messages[1]!.content).toMatch(/^SECRET BASE\n\nPLUGIN BRIEF\n\nCURRENT SCREEN \(route \/projects\)/);
+    expect(messages[1]!.content).toContain("- Create project button");
+    expect(messages[1]!.content).toContain("This area: The list");
+    expect(messages[1]!.content).toContain("ABOUT THE USER:\n- id: u1\n- name: Ada");
+    expect(messages[1]!.content).toContain("Plan: pro\n\nSession: s42 / Ada");
+    expect(messages[2]).toEqual({ role: "user", content: "hi" });
+    expect((body["tools"] as Array<{ function: { description: string } }>)[0]!.function.description).toBe("SECRET CLICK DESC");
+  });
+
+  test("a malformed context is ignored rather than rejected", async () => {
+    const up = upstream();
+    const handler = createPilotHandler({ apiKey: "k", model: "m", fetch: up.fetch, prompt: { system: "X" } });
+    const res = await handler(post({ messages: [{ role: "user", content: "hi" }], sitepilot: { nope: 1 } }));
+    expect(res.status).toBe(200);
+    expect((up.calls[0]!.body["messages"] as unknown[]).length).toBe(1);
+  });
+});

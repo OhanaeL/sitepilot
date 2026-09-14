@@ -1,3 +1,4 @@
+import type { PromptContext } from "./prompt";
 import { parseToolArgs, type ContentPart, type ToolCall, type ToolSpec } from "./tools";
 
 export interface WireToolCall {
@@ -15,6 +16,13 @@ export type ChatMessage =
 export interface CompletionRequest {
   messages: ChatMessage[];
   tools?: ToolSpec[];
+  /** Stable end-user id for the provider's abuse tracking (OpenAI `user`). */
+  userId?: string;
+  /**
+   * Present only in `prompt: "server"` mode: the structured context the server
+   * renders into the system prompt itself. Goes on the wire as `sitepilot`.
+   */
+  context?: PromptContext;
 }
 
 export interface CompletionReply {
@@ -71,6 +79,8 @@ export function openaiTransport(options: OpenAITransportOptions): Transport {
           ...(options.model && { model: options.model }),
           messages: req.messages,
           ...(req.tools?.length && { tools: req.tools }),
+          ...(req.userId && { user: req.userId }),
+          ...(req.context && { sitepilot: req.context }),
         }),
         signal,
       });
