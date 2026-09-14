@@ -1,4 +1,4 @@
-import { ANY_TIER_SELECTOR, CONTEXT_ATTR, PANEL_ATTR, READ_ATTR, TIER_ATTR, type Tier } from "./attrs";
+import { ANY_TIER_SELECTOR, CONTEXT_ATTR, HINT_ATTR, PANEL_ATTR, READ_ATTR, TIER_ATTR, type Tier } from "./attrs";
 
 export interface ScreenElement {
   /** The key the model targets — the label, ordinal-suffixed on collision (`Project card #2`). */
@@ -6,6 +6,8 @@ export interface ScreenElement {
   /** Label plus the field's current value or readable text, when present. */
   description: string;
   tier: Tier;
+  /** `data-pilot-hint`: guidance for the model, never shown to the user. */
+  hint?: string;
 }
 
 export interface ScannedElement extends ScreenElement {
@@ -26,6 +28,7 @@ export interface ScanOptions {
 const DEFAULT_MAX_ELEMENTS = 20;
 const MAX_VALUE_LEN = 120;
 const MAX_READ_LEN = 600;
+const MAX_HINT_LEN = 400;
 const MIN_CONTAINMENT_KEY_LEN = 4;
 
 function isVisible(el: HTMLElement): boolean {
@@ -94,7 +97,8 @@ function withKeys(list: Candidate[]): Array<Candidate & { key: string }> {
 
 function toScreenElement({ el, label, tier, key }: Candidate & { key: string }): ScreenElement {
   const value = fieldValue(el) || readableContent(el);
-  return { key, description: value ? `${label}: “${value}”` : label, tier };
+  const hint = clip(el.getAttribute(HINT_ATTR) ?? "", MAX_HINT_LEN);
+  return { key, description: value ? `${label}: “${value}”` : label, tier, ...(hint && { hint }) };
 }
 
 function scanTier(tier: Tier, opts: ScanOptions): ScreenElement[] {

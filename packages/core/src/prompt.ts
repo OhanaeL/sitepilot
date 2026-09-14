@@ -23,9 +23,17 @@ export interface PromptContext {
   enabledTools: string[];
 }
 
+/**
+ * Hidden per-element guidance keyed by element label (the ordinal suffix is
+ * ignored, so "Project card" matches "Project card #2"). A function receives
+ * the element and returns the hint or nothing. Merged with `data-pilot-hint`.
+ */
+export type Hints = Record<string, string> | ((element: ScreenElement) => string | undefined);
+
 export interface PromptOptions {
   /** Base instructions. Default `DEFAULT_SYSTEM_PROMPT`. */
   system?: string | undefined;
+  hints?: Hints | undefined;
   renderScreen?: ((screen: ScreenContext) => string) | undefined;
   renderUser?: ((user: Record<string, unknown>) => string) | undefined;
   /** Default 40. */
@@ -46,8 +54,22 @@ Rules:
 
 const DEFAULT_MAX_EMBEDDED = 40;
 
-export function renderScreen(ctx: ScreenContext, maxElements: number = DEFAULT_MAX_EMBEDDED): string {
-  const lines = ctx.ambient.slice(0, maxElements).map((e) => `- ${e.key}: ${e.description}`);
+const baseLabel = (key: string): string => key.replace(/ #\d+$/, "");
+
+export function hintFor(e: ScreenElement, hints?: Hints): string | undefined {
+  const own = e.hint;
+  const extra = typeof hints === "function" ? hints(e) : (hints?.[e.key] ?? hints?.[baseLabel(e.key)]);
+  return [own, extra].filter(Boolean).join(" ") || undefined;
+}
+
+/** One inventory line: `- key: description — hint`. Shared by the prompt and `get_screen_elements`. */
+export function renderElement(e: ScreenElement, hints?: Hints): string {
+  const hint = hintFor(e, hints);
+  return `- ${e.key}: ${e.description}${hint ? ` — ${hint}` : ""}`;
+}
+
+export function renderScreen(ctx: ScreenContext, maxElements: number = DEFAULT_MAX_EMBEDDED, hints?: Hints): string {
+  const lines = ctx.ambient.slice(0, maxElements).map((e) => renderElement(e, hints));
   const events = ctx.events.map((e) => `- ${e.lastMove ? "(last) " : ""}${e.type} ${e.key}`);
   return [
     `CURRENT SCREEN (route ${ctx.path}):`,
@@ -67,7 +89,7 @@ export function renderUser(user: Record<string, unknown>): string {
 }
 
 export function buildSystemPrompt(ctx: PromptContext, opts: PromptOptions = {}): string {
-  const screen = (opts.renderScreen ?? ((s) => renderScreen(s, opts.maxEmbeddedElements)))(ctx.screen);
+  const screen = (opts.renderScreen ?? ((s) => renderScreen(s, opts.maxEmbeddedElements, opts.hints)))(ctx.screen);
   const user = ctx.user ? (opts.renderUser ?? renderUser)(ctx.user) : "";
   return [
     opts.system ?? DEFAULT_SYSTEM_PROMPT,

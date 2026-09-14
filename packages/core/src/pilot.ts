@@ -2,7 +2,7 @@ import { clearHighlight } from "./actions";
 import { ACTION_TOOLS, resolveBuiltinTools, type ActionToolName, type BuiltinToolsOption } from "./builtin-tools";
 import { scanAmbient, scanContext, type ScanOptions } from "./dom";
 import { getEvents, installEventsBuffer } from "./events";
-import { buildSystemPrompt, type PromptContext, type PromptOptions, type ScreenContext } from "./prompt";
+import { buildSystemPrompt, type Hints, type PromptContext, type PromptOptions, type ScreenContext } from "./prompt";
 import { mergeStrings, type PilotStrings, type PilotStringsOverride } from "./strings";
 import {
   buildToolSpecs,
@@ -47,7 +47,9 @@ export interface PilotOptions {
   /** Base instructions (client mode). Default `DEFAULT_SYSTEM_PROMPT`. */
   systemPrompt?: string;
   /** Custom renderers and limits for the prompt (client mode). */
-  promptOptions?: Omit<PromptOptions, "system">;
+  promptOptions?: Omit<PromptOptions, "system" | "hints">;
+  /** Hidden per-element guidance by label, merged with `data-pilot-hint`. In server mode, set `prompt.hints` on the server instead. */
+  hints?: Hints;
   /** Who is using the page. Rendered into the prompt; `id` also rides as the OpenAI `user` field. */
   user?: Getter<PilotUser | null | undefined>;
   /** Per-turn app facts to add to the prompt, e.g. `() => \`Plan: ${plan}. Cart items: ${n}.\``. */
@@ -143,7 +145,7 @@ export function createPilot(options: PilotOptions): Pilot {
   const tools = (): readonly PilotTool[] => [...fixedTools, ...(resolve(options.tools) ?? [])];
   const briefs = plugins.map((p) => p.brief).filter((b): b is string => !!b);
   const strings = mergeStrings(options.strings);
-  const promptOptions: PromptOptions = { ...options.promptOptions, system: options.systemPrompt };
+  const promptOptions: PromptOptions = { ...options.promptOptions, system: options.systemPrompt, hints: options.hints };
 
   let state: PilotState = {
     messages: [],
@@ -190,6 +192,7 @@ export function createPilot(options: PilotOptions): Pilot {
     screen: collectScreen,
     scan: options.scan,
     strings,
+    hints: options.hints,
     get enabledTools() {
       return state.enabledTools;
     },

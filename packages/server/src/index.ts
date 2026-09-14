@@ -1,5 +1,10 @@
 import { buildSystemPrompt, type PromptContext, type PromptOptions } from "@sitepilot/core/prompt";
 
+/**
+ * `PromptOptions` plus server-only hooks. `hints` maps element labels to
+ * guidance the model reads next to that element — the private counterpart of
+ * `data-pilot-hint`, never sent to the browser.
+ */
 export interface ServerPromptOptions extends PromptOptions {
   /** Server-only additions per request (session facts, feature flags…). Appended after the rendered context. */
   extra?: (ctx: PromptContext, req: Request) => string | null | undefined | Promise<string | null | undefined>;
@@ -111,6 +116,7 @@ function cleanContext(raw: unknown): PromptContext | null {
       key: e["key"] as string,
       description: isStr(e["description"]) ? e["description"] : (e["key"] as string),
       tier: e["tier"] === "item" ? ("item" as const) : ("ambient" as const),
+      ...(isStr(e["hint"]) && { hint: e["hint"].slice(0, 400) }),
     }));
   const events = (Array.isArray(screen["events"]) ? screen["events"] : [])
     .filter((e): e is Json => !!e && typeof e === "object" && isStr((e as Json)["key"]) && isStr((e as Json)["type"]))

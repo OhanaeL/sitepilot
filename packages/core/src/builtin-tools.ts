@@ -1,5 +1,6 @@
 import { click, fill, highlight } from "./actions";
 import { scanItems, type ScreenElement } from "./dom";
+import { renderElement, type Hints } from "./prompt";
 import { patchTool, type PilotTool, type ToolSpec } from "./tools";
 
 export type ActionToolName = "highlight_element" | "click_element" | "fill_field";
@@ -15,8 +16,8 @@ const TARGET = {
   description: "Key of the on-screen element, exactly as listed under CURRENT SCREEN or returned by get_screen_elements.",
 };
 
-const listOf = (found: ScreenElement[], empty: string): string =>
-  found.length ? found.map((e) => `- ${e.key}: ${e.description}`).join("\n") : empty;
+const listOf = (found: ScreenElement[], empty: string, hints?: Hints): string =>
+  found.length ? found.map((e) => renderElement(e, hints)).join("\n") : empty;
 
 export const highlightTool: PilotTool = {
   kind: "action",
@@ -121,7 +122,7 @@ export const lookCloserTool: PilotTool = {
   },
   async execute(_args, ctx) {
     ctx.activity(ctx.strings.activity.lookedAtItems);
-    return listOf(scanItems(ctx.scan), ctx.strings.noItems);
+    return listOf(scanItems(ctx.scan), ctx.strings.noItems, ctx.hints);
   },
 };
 
