@@ -193,9 +193,9 @@ enabledTools: ["highlight_element"]                   // runtime consent list (t
 | `systemPrompt` | The base instructions (replaces `DEFAULT_SYSTEM_PROMPT`) |
 | `promptOptions.renderScreen` | The `CURRENT SCREEN` block — render the element list any way you like |
 | `promptOptions.renderUser` / `maxEmbeddedElements` / `briefs` | The user block, the element cap, whether plugin briefs are included |
-| `context` | Per-turn app facts: `() => \`Plan: ${plan}. Cart: ${items} items.\`` |
+| `context` | Per-turn app facts: `` () => `Plan: ${plan}. Cart: ${items} items.` `` |
 | `user` | `{ id, name, ...anything }` → rendered as `ABOUT THE USER`; `id` also rides as OpenAI's `user` field |
-| `strings` | Every tool-result string, transcript line and the synthetic `I clicked "…"` turn. Partial override, e.g. `{ clicked: (k) => \`OK: ${k}\`, activity: { highlighted: (k) => \`👉 ${k}\` } }` |
+| `strings` | Every tool-result string, transcript line and the synthetic `I clicked "…"` turn. Partial override, e.g. `` { clicked: (k) => `OK: ${k}`, activity: { highlighted: (k) => `👉 ${k}` } } `` |
 
 ### Keeping your wording off the client (`prompt: "server"`)
 
