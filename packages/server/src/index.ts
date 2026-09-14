@@ -1,10 +1,26 @@
+import { buildSystemPrompt, type PromptContext, type PromptOptions } from "@sitepilot/core/prompt";
+
+export interface ServerPromptOptions extends PromptOptions {
+  /** Server-only additions per request (session facts, feature flags…). Appended after the rendered context. */
+  extra?: (ctx: PromptContext, req: Request) => string | null | undefined | Promise<string | null | undefined>;
+}
+
 export interface PilotHandlerOptions {
   apiKey: string;
   /** Chat-completions API root. Default `https://api.openai.com/v1`. Works with any OpenAI-compatible server (LiteLLM, OpenRouter, Ollama…). */
   baseURL?: string;
   model: string;
-  /** Prepended as an extra system message the browser cannot remove. */
+  /** Prepended as an extra system message the browser cannot remove (both modes). */
   systemPrompt?: string;
+  /**
+   * Server-side prompt composition. When the browser runs `prompt: "server"` it
+   * sends a `sitepilot` context instead of a system message; this renders it
+   * here so your wording never ships to the client. `system` replaces the
+   * default base instructions.
+   */
+  prompt?: ServerPromptOptions;
+  /** Rewrite advertised tool descriptions by name, e.g. `{ click_element: "…" }`. */
+  toolDescriptions?: Record<string, string>;
   temperature?: number;
   /** Default 60. */
   maxMessages?: number;
@@ -69,14 +85,56 @@ function cleanMessage(raw: unknown): Json | null {
   return out;
 }
 
-function cleanTool(raw: unknown): Json | null {
+function cleanTool(raw: unknown, descriptions: Record<string, string>): Json | null {
   const t = raw as Json;
   const fn = t?.["function"] as Json | undefined;
   if (t?.["type"] !== "function" || typeof fn?.["name"] !== "string") return null;
-  const cleaned: Json = { name: fn["name"] };
-  if (typeof fn["description"] === "string") cleaned["description"] = fn["description"];
+  const name = fn["name"];
+  const cleaned: Json = { name };
+  const description = descriptions[name] ?? fn["description"];
+  if (typeof description === "string") cleaned["description"] = description;
   if (fn["parameters"] && typeof fn["parameters"] === "object") cleaned["parameters"] = fn["parameters"];
   return { type: "function", function: cleaned };
+}
+
+const isStr = (v: unknown): v is string => typeof v === "string";
+const strArray = (v: unknown): string[] => (Array.isArray(v) ? v.filter(isStr) : []);
+
+function cleanContext(raw: unknown): PromptContext | null {
+  if (!raw || typeof raw !== "object") return null;
+  const c = raw as Json;
+  const screen = c["screen"] as Json | undefined;
+  if (!screen || !isStr(screen["path"])) return null;
+  const ambient = (Array.isArray(screen["ambient"]) ? screen["ambient"] : [])
+    .filter((e): e is Json => !!e && typeof e === "object" && isStr((e as Json)["key"]))
+    .map((e) => ({
+      key: e["key"] as string,
+      description: isStr(e["description"]) ? e["description"] : (e["key"] as string),
+      tier: e["tier"] === "item" ? ("item" as const) : ("ambient" as const),
+    }));
+  const events = (Array.isArray(screen["events"]) ? screen["events"] : [])
+    .filter((e): e is Json => !!e && typeof e === "object" && isStr((e as Json)["key"]) && isStr((e as Json)["type"]))
+    .map((e) => ({
+      type: e["type"] as "click" | "open" | "input",
+      key: e["key"] as string,
+      tier: e["tier"] === "item" ? ("item" as const) : ("ambient" as const),
+      at: typeof e["at"] === "number" ? e["at"] : 0,
+      lastMove: e["lastMove"] === true,
+    }));
+  const area = screen["area"] as Json | null | undefined;
+  const user = c["user"];
+  return {
+    screen: {
+      path: screen["path"],
+      ambient,
+      events,
+      area: area && isStr(area["topic"]) ? { topic: area["topic"], description: isStr(area["description"]) ? area["description"] : area["topic"] } : null,
+    },
+    user: user && typeof user === "object" ? (user as Record<string, unknown>) : null,
+    extra: isStr(c["extra"]) ? c["extra"] : null,
+    briefs: strArray(c["briefs"]),
+    enabledTools: strArray(c["enabledTools"]),
+  };
 }
 
 /**
@@ -108,7 +166,20 @@ export function createPilotHandler(options: PilotHandlerOptions): (req: Request)
 
     const messages = body["messages"].map(cleanMessage);
     if (messages.some((m) => m === null)) return error(400, "malformed message");
-    const tools = Array.isArray(body["tools"]) ? body["tools"].map(cleanTool).filter(Boolean) : [];
+    const tools = Array.isArray(body["tools"])
+      ? body["tools"].map((t) => cleanTool(t, options.toolDescriptions ?? {})).filter(Boolean)
+      : [];
+
+    const system: Json[] = [];
+    if (options.systemPrompt) system.push({ role: "system", content: options.systemPrompt });
+    const context = cleanContext(body["sitepilot"]);
+    if (context) {
+      const { extra, ...promptOptions } = options.prompt ?? {};
+      const serverExtra = extra ? await extra(context, req) : null;
+      const ctx: PromptContext = { ...context, extra: [context.extra, serverExtra].filter(Boolean).join("\n\n") || null };
+      system.push({ role: "system", content: buildSystemPrompt(ctx, promptOptions) });
+    }
+    const user = isStr(body["user"]) ? body["user"].slice(0, 256) : undefined;
 
     const upstream = await doFetch(`${baseURL}/chat/completions`, {
       method: "POST",
@@ -117,8 +188,9 @@ export function createPilotHandler(options: PilotHandlerOptions): (req: Request)
         model: options.model,
         ...(options.temperature !== undefined && { temperature: options.temperature }),
         ...options.extraBody,
-        messages: options.systemPrompt ? [{ role: "system", content: options.systemPrompt }, ...messages] : messages,
+        messages: [...system, ...messages],
         ...(tools.length && { tools }),
+        ...(user && { user }),
         stream: false,
       }),
       signal: req.signal,

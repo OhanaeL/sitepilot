@@ -1,5 +1,6 @@
 import type { ScanOptions } from "./dom";
 import type { ScreenContext } from "./prompt";
+import type { PilotStrings } from "./strings";
 
 /** OpenAI-compatible function tool definition. */
 export interface ToolSpec {
@@ -27,10 +28,19 @@ export interface ToolOutput {
   attachments?: ContentPart[];
 }
 
+/** Whatever you know about the person using the page. `id` is also sent as the OpenAI `user` field. */
+export interface PilotUser {
+  id?: string;
+  name?: string;
+  [key: string]: unknown;
+}
+
 export interface ToolContext {
   screen(): ScreenContext;
   scan: ScanOptions | undefined;
   enabledTools: readonly string[];
+  user: PilotUser | null;
+  strings: PilotStrings;
   /** Post a line to the chat transcript ("Clicked Save button"). */
   activity(text: string): void;
   /** Send a follow-up user turn once the current one finishes. */
@@ -40,7 +50,7 @@ export interface ToolContext {
 
 export interface PilotTool {
   spec: ToolSpec;
-  /** Actions need user consent (the `tools` list); utilities ride along whenever any action is enabled. */
+  /** Actions need user consent (`enabledTools`); utilities ride along whenever any action is enabled. */
   kind: "action" | "utility";
   execute(args: Record<string, unknown>, ctx: ToolContext): Promise<ToolOutput | string>;
 }
@@ -50,6 +60,40 @@ export interface PilotPlugin {
   tools?: PilotTool[];
   /** Operating instructions appended to the system prompt while the plugin is installed. */
   brief?: string;
+}
+
+export interface DefineToolOptions<A extends Record<string, unknown> = Record<string, unknown>> {
+  name: string;
+  description: string;
+  /** JSON Schema for the arguments. Default: an object with no properties. */
+  parameters?: Record<string, unknown>;
+  /** Default "action" (consent-gated). */
+  kind?: "action" | "utility";
+  execute(args: A, ctx: ToolContext): Promise<ToolOutput | string> | ToolOutput | string;
+}
+
+/** Flat helper for custom tools: `defineTool({ name, description, parameters, execute })`. */
+export function defineTool<A extends Record<string, unknown> = Record<string, unknown>>(
+  options: DefineToolOptions<A>,
+): PilotTool {
+  return {
+    kind: options.kind ?? "action",
+    spec: {
+      type: "function",
+      function: {
+        name: options.name,
+        description: options.description,
+        parameters: options.parameters ?? { type: "object", properties: {} },
+      },
+    },
+    execute: async (args, ctx) => options.execute(args as A, ctx),
+  };
+}
+
+/** Patch a tool's advertised description/parameters without touching its behaviour. */
+export function patchTool(tool: PilotTool, patch: Partial<ToolSpec["function"]> & { kind?: PilotTool["kind"] }): PilotTool {
+  const { kind, ...fn } = patch;
+  return { ...tool, kind: kind ?? tool.kind, spec: { type: "function", function: { ...tool.spec.function, ...fn } } };
 }
 
 export function buildToolSpecs(tools: readonly PilotTool[], enabled: readonly string[]): ToolSpec[] {

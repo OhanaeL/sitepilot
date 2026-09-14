@@ -22,6 +22,8 @@ bun run dev:example
 - **Attribute contract lives in `packages/core/src/attrs.ts`** and is documented in the README table. Renaming an attribute is a breaking change for every consumer's markup.
 - **Ordinal keys are computed in one namespace across both tiers** (`withKeys` in `dom.ts`); `scanAll` and `resolveKey` must share that path or targeting silently misses.
 - **Tool consent is enforced in `pilot.ts`, not in tools**: actions must be in `enabledTools`; utilities need at least one enabled action.
+- **`tools`/`user`/`context` are getters read every round**; the React provider feeds them through a ref so the pilot is created once per `transport`/`plugins`/`prompt`/`systemPrompt` and still sees live state.
+- **Two prompt modes.** `prompt: "client"` builds the system message in the browser; `"server"` sends a `sitepilot` context field and no system message, and `@sitepilot/server` renders it (`cleanContext` re-validates it — treat it as untrusted). `@sitepilot/core/prompt` is the pure subpath the server imports; keep it free of DOM/driver.js imports.
 - **Tool attachments are turn-scoped** (`stripEphemeralMedia`). Do not persist images across user turns.
 - **driver.js CSS is inlined** at build (`loader: {".css": "text"}` + `noExternal`) and injected once by `ensureStyles()`. Consumers need no CSS import.
 - **Widget z-index is 10002**: above driver's overlay (10000) and click ring (10001), below its popover (1e9), so captions render over the panel.

@@ -1,10 +1,19 @@
 import { computerPlugin } from "@sitepilot/computer";
 import { openaiTransport } from "@sitepilot/core";
-import { mark, markContext, markItem, markRead, SitepilotProvider, SitepilotWidget } from "@sitepilot/react";
+import { defineTool, mark, markContext, markItem, markRead, SitepilotProvider, SitepilotWidget } from "@sitepilot/react";
 import { useState } from "react";
 
 const transport = openaiTransport({ url: "/api/pilot" });
 const plugins = [computerPlugin()];
+const HISTORY_KEY = "acme-pilot-history";
+
+function savedHistory() {
+  try {
+    return JSON.parse(localStorage.getItem(HISTORY_KEY) ?? "[]");
+  } catch {
+    return [];
+  }
+}
 
 interface Project {
   id: number;
@@ -69,8 +78,28 @@ export function App() {
 
   const visible = projects.filter((p) => p.name.toLowerCase().includes(query.toLowerCase()));
 
+  const countProjects = defineTool<{ status?: "active" | "paused" }>({
+    name: "count_projects",
+    description: "How many projects the user has, optionally filtered by status. Reads live app state, not the screen.",
+    parameters: { type: "object", properties: { status: { type: "string", enum: ["active", "paused"] } } },
+    kind: "utility",
+    execute: ({ status }) => {
+      const n = projects.filter((p) => !status || p.status === status).length;
+      return `${n} project${n === 1 ? "" : "s"}${status ? ` are ${status}` : ""}.`;
+    },
+  });
+
   return (
-    <SitepilotProvider transport={transport} plugins={plugins}>
+    <SitepilotProvider
+      transport={transport}
+      plugins={plugins}
+      tools={[countProjects]}
+      prompt="server"
+      user={{ id: "demo-user", name: "Jane", role: "owner" }}
+      context={() => `The user is on the ${tab} tab and has ${projects.length} projects.`}
+      history={{ initial: savedHistory(), onChange: (h) => localStorage.setItem(HISTORY_KEY, JSON.stringify(h)) }}
+      strings={{ activity: { highlighted: (key) => `👉 ${key}` } }}
+    >
       <div className="app" {...markContext("acme-projects", "Acme Projects: a workspace where the user manages projects.")}>
         <aside>
           <div className="brand">Acme</div>
@@ -162,7 +191,7 @@ export function App() {
         />
       )}
 
-      <SitepilotWidget title="Acme assistant" defaultOpen />
+      <SitepilotWidget title="Pip" defaultOpen toolLabels={{ count_projects: "Count" }} />
     </SitepilotProvider>
   );
 }

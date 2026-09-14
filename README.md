@@ -155,6 +155,86 @@ The agent gets one more tool, `computer`, that takes a batch of up to 8 actions 
 
 Needs a vision-capable model. The plugin adds its own operating brief to the system prompt ("look before you act", "look again after").
 
+## Customizing everything
+
+Every string the model sees and every tool it can call is yours to change. All of these are `createPilot` options, and `<SitepilotProvider>` takes the same props.
+
+### Your own tools
+
+```tsx
+import { defineTool } from "@sitepilot/react";
+
+const countProjects = defineTool<{ status?: "active" | "paused" }>({
+  name: "count_projects",
+  description: "How many projects the user has, optionally by status.",
+  parameters: { type: "object", properties: { status: { type: "string", enum: ["active", "paused"] } } },
+  kind: "utility",                 // "action" (default) needs consent; "utility" rides along
+  execute: ({ status }) => `${projects.filter((p) => !status || p.status === status).length} projects.`,
+});
+
+<SitepilotProvider tools={[countProjects]} …>
+```
+
+Tools are read every round, so an inline `defineTool` whose closure reads component state stays fresh — no memoisation needed. `execute` may return a string or `{ content, attachments }` (images the model sees this round). `ctx` gives you the current screen, the user, the strings table, and `activity()` for a transcript line.
+
+### The built-ins
+
+```ts
+builtinTools: false                                   // none — bring your own
+builtinTools: { click_element: false }                // drop one
+builtinTools: { highlight_element: { description: "Point at an element…" } }   // reword one
+enabledTools: ["highlight_element"]                   // runtime consent list (the widget's toggles drive this)
+```
+
+### Prompt text
+
+| Option | What it changes |
+|---|---|
+| `systemPrompt` | The base instructions (replaces `DEFAULT_SYSTEM_PROMPT`) |
+| `promptOptions.renderScreen` | The `CURRENT SCREEN` block — render the element list any way you like |
+| `promptOptions.renderUser` / `maxEmbeddedElements` / `briefs` | The user block, the element cap, whether plugin briefs are included |
+| `context` | Per-turn app facts: `() => \`Plan: ${plan}. Cart: ${items} items.\`` |
+| `user` | `{ id, name, ...anything }` → rendered as `ABOUT THE USER`; `id` also rides as OpenAI's `user` field |
+| `strings` | Every tool-result string, transcript line and the synthetic `I clicked "…"` turn. Partial override, e.g. `{ clicked: (k) => \`OK: ${k}\`, activity: { highlighted: (k) => \`👉 ${k}\` } }` |
+
+### Keeping your wording off the client (`prompt: "server"`)
+
+In the default `client` mode the browser composes the system prompt, so anyone can read it in devtools. Flip the pilot to **server mode** and it sends only a structured `sitepilot` context (screen, user, app facts, plugin briefs) with no system message at all; `@sitepilot/server` renders the prompt on the server:
+
+```tsx
+// browser
+<SitepilotProvider prompt="server" user={{ id: session.userId, name: session.name }} …>
+```
+
+```ts
+// server
+createPilotHandler({
+  apiKey, model,
+  prompt: {
+    system: "You are Pip, the Acme assistant. …",            // never leaves the server
+    extra: (ctx, req) => `Plan: ${await planFor(req)}`,       // server-only facts per request
+    renderScreen: (screen) => …,                             // optional
+  },
+  toolDescriptions: { click_element: "…" },                 // rewrite any advertised description, both modes
+  systemPrompt: "…",                                         // always prepended, both modes
+});
+```
+
+The tool *result* strings still come from the browser (they're produced where the tool runs); use `strings` for those.
+
+### History
+
+```ts
+history: {
+  initial: JSON.parse(localStorage.getItem("pilot") ?? "[]"),   // restore
+  onChange: (h) => localStorage.setItem("pilot", JSON.stringify(h)),   // persist every write
+  max: 40,                                                       // wire messages per round
+  trim: (h, max) => …,                                           // your own windowing / summarisation hook
+}
+```
+
+`pilot.getHistory()` / `pilot.loadHistory()` do the same imperatively; loading rebuilds the visible transcript from the user/assistant text. Screenshots are never persisted — they're stripped after the turn that produced them.
+
 ## Writing a plugin
 
 A plugin is `{ name, tools?, brief? }`. A tool is an OpenAI function spec plus `execute(args, ctx)` returning a string or `{ content, attachments }`. `kind: "action"` tools are consent-gated; `kind: "utility"` tools ride along whenever any action is enabled.

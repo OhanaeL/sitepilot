@@ -75,7 +75,7 @@ describe("createPilot", () => {
   test("disabled tools are refused even if the model calls them", async () => {
     document.body.innerHTML = `<button data-pilot="Save button"></button>`;
     const transport = scripted([call("click_element", { target: "Save button" }), { content: "ok" }]);
-    await createPilot({ transport, tools: ["highlight_element"] }).send("click");
+    await createPilot({ transport, enabledTools: ["highlight_element"] }).send("click");
     expect(transport.requests[0]!.tools?.map((t) => t.function.name)).toEqual([
       "highlight_element",
       "get_screen_elements",
@@ -88,7 +88,7 @@ describe("createPilot", () => {
 
   test("no tools enabled: no tools on the wire, look-closer refused", async () => {
     const transport = scripted([call("get_screen_elements", {}), { content: "ok" }]);
-    await createPilot({ transport, tools: [] }).send("look");
+    await createPilot({ transport, enabledTools: [] }).send("look");
     expect(transport.requests[0]!.tools).toEqual([]);
     expect(transport.requests[1]!.messages.at(-1)).toMatchObject({
       role: "tool",
@@ -155,7 +155,7 @@ describe("createPilot", () => {
 
   test("history is trimmed at a user boundary", async () => {
     const transport = scripted([{ content: "1" }, { content: "2" }, { content: "3" }]);
-    const pilot = createPilot({ transport, maxHistory: 3 });
+    const pilot = createPilot({ transport, history: { max: 3 } });
     await pilot.send("a");
     await pilot.send("b");
     await pilot.send("c");
@@ -209,7 +209,7 @@ describe("plugins", () => {
 
   test("an explicit consent list can exclude a plugin action", async () => {
     const transport = scripted([{ content: "ok" }]);
-    await createPilot({ transport, plugins: [plugin], tools: ["click_element"] }).send("hi");
+    await createPilot({ transport, plugins: [plugin], enabledTools: ["click_element"] }).send("hi");
     expect(transport.requests[0]!.tools?.map((t) => t.function.name)).toEqual(["click_element", "get_screen_elements"]);
   });
 
@@ -220,5 +220,137 @@ describe("plugins", () => {
     await pilot.send("look");
     expect(transport.requests[1]!.messages.at(-1)).toMatchObject({ role: "tool", content: expect.stringContaining("lens cap") });
     expect(pilot.getState().error).toBeNull();
+  });
+});
+
+describe("customization", () => {
+  test("defineTool adds a first-class custom tool with typed args", async () => {
+    const { defineTool } = await import("../src/tools");
+    const seen: string[] = [];
+    const count = defineTool<{ status: string }>({
+      name: "count_projects",
+      description: "How many projects have the given status.",
+      parameters: { type: "object", properties: { status: { type: "string" } }, required: ["status"] },
+      execute: ({ status }) => {
+        seen.push(status);
+        return `3 projects are ${status}`;
+      },
+    });
+    const transport = scripted([call("count_projects", { status: "active" }), { content: "three" }]);
+    await createPilot({ transport, tools: [count] }).send("how many active?");
+    expect(seen).toEqual(["active"]);
+    expect(transport.requests[0]!.tools?.map((t) => t.function.name)).toContain("count_projects");
+    expect(transport.requests[1]!.messages.at(-1)).toMatchObject({ role: "tool", content: "3 projects are active" });
+  });
+
+  test("builtinTools can drop or patch built-ins", async () => {
+    const transport = scripted([{ content: "ok" }]);
+    await createPilot({
+      transport,
+      builtinTools: { click_element: false, highlight_element: { description: "POINT AT IT" } },
+    }).send("hi");
+    const specs = transport.requests[0]!.tools!;
+    expect(specs.map((t) => t.function.name)).toEqual(["highlight_element", "fill_field", "get_screen_elements"]);
+    expect(specs[0]!.function.description).toBe("POINT AT IT");
+  });
+
+  test("builtinTools: false leaves only custom/plugin tools", async () => {
+    const transport = scripted([{ content: "ok" }]);
+    const pilot = createPilot({ transport, builtinTools: false });
+    await pilot.send("hi");
+    expect(pilot.availableTools()).toHaveLength(0);
+    expect(transport.requests[0]!.tools).toEqual([]);
+  });
+
+  test("strings override model-facing results, transcript lines and the synthetic turn", async () => {
+    document.body.innerHTML = `<button data-pilot="Save button"></button>`;
+    const transport = scripted([call("click_element", { target: "Save button" }), { content: "ok" }]);
+    const pilot = createPilot({
+      transport,
+      strings: { clicked: (k) => `OK:${k}`, activity: { clicked: (k) => `did ${k}` } },
+    });
+    await pilot.send("click");
+    expect(transport.requests[1]!.messages.at(-1)).toMatchObject({ role: "tool", content: "OK:Save button" });
+    expect(pilot.getState().messages.some((m) => m.content === "did Save button")).toBe(true);
+    expect(pilot.strings.userClicked("X")).toBe('I clicked "X".');
+  });
+
+  test("user and context land in the prompt; user.id rides as userId", async () => {
+    const transport = scripted([{ content: "ok" }]);
+    let plan = "free";
+    await createPilot({
+      transport,
+      systemPrompt: "BASE",
+      user: { id: "u1", name: "Ada", role: "admin" },
+      context: () => `Plan: ${plan}`,
+    }).send("hi");
+    const req = transport.requests[0]!;
+    const sys = req.messages[0]!.content as string;
+    expect(sys).toMatch(/^BASE\n\nCURRENT SCREEN/);
+    expect(sys).toContain("ABOUT THE USER:\n- id: u1\n- name: Ada\n- role: admin");
+    expect(sys).toContain("Plan: free");
+    expect(req.userId).toBe("u1");
+    plan = "pro";
+  });
+
+  test("promptOptions.renderScreen replaces the screen block", async () => {
+    document.body.innerHTML = `<button data-pilot="Save button"></button>`;
+    const transport = scripted([{ content: "ok" }]);
+    await createPilot({ transport, promptOptions: { renderScreen: (s) => `ELEMENTS=${s.ambient.length}` } }).send("hi");
+    expect(transport.requests[0]!.messages[0]!.content).toContain("ELEMENTS=1");
+    expect(transport.requests[0]!.messages[0]!.content).not.toContain("CURRENT SCREEN (route");
+  });
+
+  test("prompt: server sends no system message and a structured context instead", async () => {
+    document.body.innerHTML = `<button data-pilot="Save button"></button>`;
+    const transport = scripted([{ content: "ok" }]);
+    await createPilot({
+      transport,
+      prompt: "server",
+      user: { id: "u1" },
+      context: "Plan: pro",
+      plugins: [{ name: "p", brief: "BRIEF" }],
+      getPath: () => "/x",
+    }).send("hi");
+    const req = transport.requests[0]!;
+    expect(req.messages[0]).toEqual({ role: "user", content: "hi" });
+    expect(req.context).toMatchObject({
+      screen: { path: "/x", ambient: [{ key: "Save button" }] },
+      user: { id: "u1" },
+      extra: "Plan: pro",
+      briefs: ["BRIEF"],
+      enabledTools: ["highlight_element", "click_element", "fill_field"],
+    });
+  });
+
+  test("history: initial restores the transcript, onChange reports every write, get/load round-trip", async () => {
+    const changes: number[] = [];
+    const transport = scripted([{ content: "two" }]);
+    const pilot = createPilot({
+      transport,
+      history: {
+        initial: [{ role: "user", content: "one?" }, { role: "assistant", content: "one." }],
+        onChange: (h) => changes.push(h.length),
+      },
+    });
+    expect(pilot.getState().messages.map((m) => m.content)).toEqual(["one?", "one."]);
+    await pilot.send("two?");
+    expect(changes).toEqual([3, 4]);
+    expect(transport.requests[0]!.messages.slice(1)).toHaveLength(3);
+    const saved = pilot.getHistory();
+    expect(saved).toHaveLength(4);
+    expect((saved[3] as { ephemeral?: boolean }).ephemeral).toBeUndefined();
+
+    const other = createPilot({ transport: scripted([]) });
+    other.loadHistory(saved);
+    expect(other.getState().messages.map((m) => m.content)).toEqual(["one?", "one.", "two?", "two"]);
+  });
+
+  test("history.trim replaces the default trimmer", async () => {
+    const transport = scripted([{ content: "a" }, { content: "b" }]);
+    const pilot = createPilot({ transport, history: { trim: (h) => h.slice(-1) } });
+    await pilot.send("1");
+    await pilot.send("2");
+    expect(transport.requests[1]!.messages.slice(1)).toEqual([{ role: "user", content: "2" }]);
   });
 });

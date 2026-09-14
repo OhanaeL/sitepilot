@@ -41,8 +41,16 @@ describe("prompt", () => {
     expect(text).toContain("(last) click Nav");
   });
 
-  test("custom base prompt is honoured", () => {
-    expect(buildSystemPrompt(ctx, "BASE")).toMatch(/^BASE\n\nCURRENT SCREEN/);
+  test("prompt composition: base, briefs, screen, user, extra", () => {
+    const full = buildSystemPrompt(
+      { screen: ctx, user: { name: "Ada" }, extra: "Plan: pro", briefs: ["BRIEF"], enabledTools: [] },
+      { system: "BASE" },
+    );
+    expect(full).toMatch(/^BASE\n\nBRIEF\n\nCURRENT SCREEN/);
+    expect(full).toContain("ABOUT THE USER:\n- name: Ada");
+    expect(full).toMatch(/Plan: pro$/);
+    const noBriefs = buildSystemPrompt({ screen: ctx, user: null, extra: null, briefs: ["BRIEF"], enabledTools: [] }, { briefs: false });
+    expect(noBriefs).not.toContain("BRIEF");
   });
 });
 
