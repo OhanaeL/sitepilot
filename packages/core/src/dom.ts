@@ -1,4 +1,5 @@
 import { ANY_TIER_SELECTOR, CONTEXT_ATTR, HINT_ATTR, PANEL_ATTR, READ_ATTR, TIER_ATTR, type Tier } from "./attrs";
+import { manifestAreas, manifestRules, renderLabel, safeQueryAll } from "./manifest";
 
 export interface ScreenElement {
   /** The key the model targets — the label, ordinal-suffixed on collision (`Project card #2`). */
@@ -62,26 +63,56 @@ function fieldValue(el: HTMLElement): string {
   return inner ? clip(inner.value, MAX_VALUE_LEN) : "";
 }
 
-function readableContent(el: HTMLElement): string {
-  return el.hasAttribute(READ_ATTR) ? clip(el.textContent ?? "", MAX_READ_LEN) : "";
+function readableContent(el: HTMLElement, read: boolean): string {
+  return read ? clip(el.textContent ?? "", MAX_READ_LEN) : "";
 }
 
 interface Candidate {
   el: HTMLElement;
   label: string;
   tier: Tier;
+  hint: string;
+  read: boolean;
 }
 
+// Attribute-marked elements and manifest matches merge into one DOM-ordered
+// list; an element's own attribute label wins over a manifest template.
 function candidates(root: ParentNode, tiers: Tier[]): Candidate[] {
-  const out: Candidate[] = [];
+  const found = new Map<HTMLElement, Candidate>();
   for (const tier of tiers) {
     const attr = TIER_ATTR[tier];
     for (const el of root.querySelectorAll<HTMLElement>(`[${attr}]`)) {
       const label = (el.getAttribute(attr) ?? "").trim();
-      if (label && isInteractable(el)) out.push({ el, label, tier });
+      if (label && isInteractable(el)) {
+        found.set(el, { el, label, tier, hint: el.getAttribute(HINT_ATTR) ?? "", read: el.hasAttribute(READ_ATTR) });
+      }
     }
   }
-  return out;
+  for (const rule of manifestRules()) {
+    if (!tiers.includes(rule.tier)) continue;
+    for (const el of safeQueryAll<HTMLElement>(root, rule.selector)) {
+      if (!isInteractable(el)) continue;
+      const own = found.get(el);
+      if (own) {
+        if (!own.hint && rule.hint) own.hint = rule.hint;
+        own.read ||= rule.read ?? false;
+        continue;
+      }
+      const attrLabel = (el.getAttribute(TIER_ATTR[rule.tier]) ?? "").trim();
+      const label = attrLabel || renderLabel(rule.label, el);
+      if (!label) continue;
+      found.set(el, {
+        el,
+        label,
+        tier: rule.tier,
+        hint: el.getAttribute(HINT_ATTR) ?? rule.hint ?? "",
+        read: el.hasAttribute(READ_ATTR) || (rule.read ?? false),
+      });
+    }
+  }
+  return Array.from(found.values()).sort((a, b) =>
+    a.el === b.el ? 0 : a.el.compareDocumentPosition(b.el) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1,
+  );
 }
 
 // Ordinals are counted over one shared map across tiers: the model sees a
@@ -95,9 +126,9 @@ function withKeys(list: Candidate[]): Array<Candidate & { key: string }> {
   });
 }
 
-function toScreenElement({ el, label, tier, key }: Candidate & { key: string }): ScreenElement {
-  const value = fieldValue(el) || readableContent(el);
-  const hint = clip(el.getAttribute(HINT_ATTR) ?? "", MAX_HINT_LEN);
+function toScreenElement({ el, label, tier, key, hint: rawHint, read }: Candidate & { key: string }): ScreenElement {
+  const value = fieldValue(el) || readableContent(el, read);
+  const hint = clip(rawHint, MAX_HINT_LEN);
   return { key, description: value ? `${label}: “${value}”` : label, tier, ...(hint && { hint }) };
 }
 
@@ -138,21 +169,27 @@ function depth(el: HTMLElement): number {
   return d;
 }
 
-/** The innermost reachable `data-pilot-context` marker — a modal's context beats the page's. */
+/** The innermost reachable context marker (attribute or manifest area) — a modal's context beats the page's. */
 export function scanContext(root?: ParentNode): AreaContext | null {
   if (typeof document === "undefined") return null;
   const scope = root ?? document;
-  const nodes = Array.from(scope.querySelectorAll<HTMLElement>(`[${CONTEXT_ATTR.topic}]`)).filter(
-    (el) => markerReachable(el) && (el.getAttribute(CONTEXT_ATTR.topic) ?? "").trim(),
-  );
-  const winner = nodes.reduce<HTMLElement | null>(
-    (best, el) => (!best || depth(el) > depth(best) ? el : best),
+  const markers: Array<{ el: HTMLElement; area: AreaContext }> = [];
+  for (const el of scope.querySelectorAll<HTMLElement>(`[${CONTEXT_ATTR.topic}]`)) {
+    const topic = (el.getAttribute(CONTEXT_ATTR.topic) ?? "").trim();
+    if (topic && markerReachable(el)) {
+      markers.push({ el, area: { topic, description: (el.getAttribute(CONTEXT_ATTR.description) ?? "").trim() || topic } });
+    }
+  }
+  for (const area of manifestAreas()) {
+    for (const el of safeQueryAll<HTMLElement>(scope, area.selector)) {
+      if (markerReachable(el)) markers.push({ el, area: { topic: area.topic, description: area.description } });
+    }
+  }
+  const winner = markers.reduce<(typeof markers)[number] | null>(
+    (best, m) => (!best || depth(m.el) > depth(best.el) ? m : best),
     null,
   );
-  if (!winner) return null;
-  const topic = (winner.getAttribute(CONTEXT_ATTR.topic) ?? "").trim();
-  const description = (winner.getAttribute(CONTEXT_ATTR.description) ?? "").trim() || topic;
-  return { topic, description };
+  return winner?.area ?? null;
 }
 
 const norm = (s: string): string => s.trim().toLowerCase().replace(/\s+/g, " ");

@@ -1,0 +1,16 @@
+name = "sitepilot-pilot"
+main = "src/index.ts"
+compatibility_date = "2025-09-01"
+
+# Set secrets with:  wrangler secret put PILOT_API_KEY
+[vars]
+PILOT_BASE_URL = "https://api.openai.com/v1"
+PILOT_MODEL = "gpt-4o-mini"
+ALLOW_ORIGINS = "https://ohanael.github.io"
+
+# Optional: a free-tier rate limit binding (Workers Rate Limiting API).
+# [[unsafe.bindings]]
+# name = "LIMITER"
+# type = "ratelimit"
+# namespace_id = "1001"
+# simple = { limit = 20, period = 60 }

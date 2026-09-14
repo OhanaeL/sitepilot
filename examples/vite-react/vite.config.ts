@@ -18,7 +18,6 @@ function pilotApi(env: Record<string, string>): Plugin {
           ].join(" "),
           extra: (_ctx, req) => `Request came from ${req.headers.get("user-agent")?.split(" ")[0] ?? "unknown"}.`,
           hints: {
-            "Search projects field": "Filters the cards live as the user types; matching is case-insensitive on the name.",
             "Password field": "NEVER read, fill, or mention this field's value. If asked, tell the user to change it themselves.",
           },
         },

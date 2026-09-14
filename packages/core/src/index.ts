@@ -4,6 +4,7 @@ export * from "./events";
 export * from "./actions";
 export * from "./tools";
 export * from "./strings";
+export * from "./manifest";
 export * from "./builtin-tools";
 export * from "./prompt";
 export * from "./transport";

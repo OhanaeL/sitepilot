@@ -54,12 +54,16 @@ function scrollIntoViewSettled(el: HTMLElement): Promise<void> {
     const start = performance.now();
     let last = Number.NaN;
     let stable = 0;
+    // rAF is paused in background tabs, so a timer backstop keeps the action from hanging.
+    const backstop = setTimeout(resolve, SCROLL_SETTLE_MS + 50);
     const tick = () => {
       const { top } = el.getBoundingClientRect();
       stable = Math.abs(top - last) < 0.5 ? stable + 1 : 0;
       last = top;
-      if (stable >= 3 || performance.now() - start > SCROLL_SETTLE_MS) resolve();
-      else requestAnimationFrame(tick);
+      if (stable >= 3 || performance.now() - start > SCROLL_SETTLE_MS) {
+        clearTimeout(backstop);
+        resolve();
+      } else requestAnimationFrame(tick);
     };
     requestAnimationFrame(tick);
   });

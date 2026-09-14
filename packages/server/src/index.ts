@@ -33,6 +33,13 @@ export interface PilotHandlerOptions {
   maxBodyBytes?: number;
   /** Extra fields merged into the upstream request (e.g. `reasoning_effort`). */
   extraBody?: Record<string, unknown>;
+  /**
+   * Browser origins allowed to call this endpoint cross-site (a static site on
+   * GitHub Pages talking to a Worker). Exact origins or `*`. Answers preflights,
+   * sets the CORS headers, and rejects other origins with 403. Same-origin
+   * requests (no `Origin` header, or one matching the request host) always pass.
+   */
+  allowOrigins?: string[];
   fetch?: typeof fetch;
 }
 
@@ -45,6 +52,38 @@ function json(status: number, body: Json): Response {
 }
 
 const error = (status: number, message: string): Response => json(status, { error: { message } });
+
+function corsHeaders(origin: string): Record<string, string> {
+  return {
+    "access-control-allow-origin": origin,
+    "access-control-allow-methods": "POST, OPTIONS",
+    "access-control-allow-headers": "content-type, authorization",
+    "access-control-max-age": "86400",
+    vary: "origin",
+  };
+}
+
+function withHeaders(res: Response, headers: Record<string, string>): Response {
+  const out = new Response(res.body, res);
+  for (const [k, v] of Object.entries(headers)) out.headers.set(k, v);
+  return out;
+}
+
+/** null = same-origin (no CORS needed); a string = allowed cross-origin; false = rejected. */
+function checkOrigin(req: Request, allow: string[] | undefined): string | null | false {
+  const origin = req.headers.get("origin");
+  if (!origin) return null;
+  let host = "";
+  try {
+    host = new URL(req.url).host;
+  } catch {
+    host = "";
+  }
+  if (new URL(origin).host === host) return null;
+  if (!allow) return false;
+  if (allow.includes("*")) return "*";
+  return allow.includes(origin) ? origin : false;
+}
 
 function isPart(p: unknown): boolean {
   if (!p || typeof p !== "object") return false;
@@ -154,7 +193,7 @@ export function createPilotHandler(options: PilotHandlerOptions): (req: Request)
   const maxBodyBytes = options.maxBodyBytes ?? 8 * 1024 * 1024;
   const doFetch = options.fetch ?? globalThis.fetch.bind(globalThis);
 
-  return async (req) => {
+  const handle = async (req: Request): Promise<Response> => {
     if (req.method !== "POST") return error(405, "POST only");
     const declared = Number(req.headers.get("content-length") ?? 0);
     if (declared > maxBodyBytes) return error(413, "request body too large");
@@ -207,6 +246,16 @@ export function createPilotHandler(options: PilotHandlerOptions): (req: Request)
       headers: { "content-type": upstream.headers.get("content-type") ?? "application/json" },
     });
   };
+
+  return async (req) => {
+    const origin = checkOrigin(req, options.allowOrigins);
+    if (origin === false) return error(403, "origin not allowed");
+    if (req.method === "OPTIONS") {
+      return new Response(null, { status: 204, headers: origin ? corsHeaders(origin) : {} });
+    }
+    const res = await handle(req);
+    return origin ? withHeaders(res, corsHeaders(origin)) : res;
+  };
 }
 
 interface NodeReq {
@@ -237,8 +286,9 @@ export function toNodeListener(handler: (req: Request) => Promise<Response>) {
       else if (Array.isArray(v)) headers.set(k, v.join(", "));
     }
     const body = chunks.length ? new Blob(chunks as BlobPart[]) : undefined;
+    const host = headers.get("host") ?? "localhost";
     const response = await handler(
-      new Request(`http://localhost${req.url ?? "/"}`, { method: req.method ?? "POST", headers, ...(body && { body }) }),
+      new Request(`http://${host}${req.url ?? "/"}`, { method: req.method ?? "POST", headers, ...(body && { body }) }),
     );
     res.statusCode = response.status;
     response.headers.forEach((value, key) => res.setHeader(key, value));

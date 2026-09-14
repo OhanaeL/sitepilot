@@ -112,6 +112,34 @@ What the scan guarantees:
 - **Duplicate labels get ordinals** (`Project card #2`) in one namespace across both tiers, so a key always resolves to exactly one node.
 - **Keys resolve fuzzily.** Models paraphrase; a unique normalized-containment match is accepted, a tiny key like "Search" is not.
 
+## Keep the markup clean: `pilot.json`
+
+You don't have to touch your components at all. A manifest maps CSS selectors to labels, tiers, hints and area context, and the scanner reads it virtually — nothing is written to the DOM, so framework re-renders can't lose it:
+
+```json
+{
+  "elements": [
+    { "selector": ".btn-new-project", "label": "Create project button", "hint": "Opens the New project dialog." },
+    { "selector": ".project-card",    "label": "Project card: {text:.title}", "tier": "item", "hint": "Click opens its details." },
+    { "selector": "nav a",            "label": "{text} nav link" },
+    { "selector": "#search",          "label": "Search field" }
+  ],
+  "areas": [
+    { "selector": "main.projects", "topic": "projects", "description": "The projects list." }
+  ],
+  "hints": { "Settings nav link": "Account settings: display name, email, password." },
+  "systemPrompt": "You are the guide to Acme…"
+}
+```
+
+```tsx
+<SitepilotProvider manifest="/pilot.json" …>        // a URL, or the object itself
+```
+
+Label templates fill per matched element: `{text}`, `{text:.title}` (a descendant's text), `{attr:data-id}`, `{value}`, `{placeholder}`, `{href}`, `{alt}`, `{title}`. Attributes and manifest rules coexist: an element's own `data-pilot` label wins over a template, and either source can supply the hint. Invalid selectors are skipped with a console warning. `send()` waits for a URL manifest to load; a failed load shows up in `state.error` and the pilot carries on with attributes only.
+
+The manifest is fetched by the browser, so it is public — keep private guidance in the server's `prompt.hints`.
+
 ## How a turn works
 
 ```
@@ -284,9 +312,13 @@ pilot.subscribe(() => render(pilot.getState()));
 pilot.send("where is the search box?");
 ```
 
+## Static sites (GitHub Pages, Netlify, S3…)
+
+Everything sitepilot does runs in the browser; the only thing a static site can't hold is the LLM key. Put `createPilotHandler` on a Cloudflare Worker (free tier) with `allowOrigins` set to your site — see [`examples/cloudflare-worker`](examples/cloudflare-worker). The site then points at `https://<name>.workers.dev` and stays 100% static.
+
 ## Security notes
 
-- The proxy strips everything but `messages` and `tools`, pins `model`, caps message count and body size, and rejects `image_url` parts that are not `data:image/…` or `https://`. Add your own auth/rate-limit in front of it — it is deliberately unopinionated about sessions.
+- The proxy strips everything but `messages`, `tools` and `user`, pins `model`, caps message count and body size, and rejects `image_url` parts that are not `data:image/…` or `https://`. Cross-origin callers are refused unless listed in `allowOrigins` (which also answers preflights). Add your own auth/rate-limit in front of it — it is deliberately unopinionated about sessions.
 - The browser builds the system prompt. That is by design (the DOM is there), and it is not a secret; the key is. `systemPrompt` on the server is prepended and cannot be removed by the client.
 - Consent is enforced twice: disabled tools are not advertised, and a call to one is refused even if the model invents it.
 

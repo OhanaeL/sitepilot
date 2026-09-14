@@ -95,6 +95,7 @@ export function App() {
       plugins={plugins}
       tools={[countProjects]}
       prompt="server"
+      manifest="/pilot.json"
       user={{ id: "demo-user", name: "Jane", role: "owner" }}
       context={() => `The user is on the ${tab} tab and has ${projects.length} projects.`}
       history={{ initial: savedHistory(), onChange: (h) => localStorage.setItem(HISTORY_KEY, JSON.stringify(h)) }}
@@ -104,14 +105,10 @@ export function App() {
         <aside>
           <div className="brand">Acme</div>
           <nav>
-            <button className={tab === "projects" ? "on" : ""} onClick={() => setTab("projects")} {...mark("Projects nav link")}>
+            <button className={tab === "projects" ? "on" : ""} onClick={() => setTab("projects")}>
               Projects
             </button>
-            <button
-              className={tab === "settings" ? "on" : ""}
-              onClick={() => setTab("settings")}
-              {...mark("Settings nav link", { hint: "Account settings: display name, email, password." })}
-            >
+            <button className={tab === "settings" ? "on" : ""} onClick={() => setTab("settings")}>
               Settings
             </button>
           </nav>
@@ -122,12 +119,7 @@ export function App() {
             <>
               <header>
                 <h1>Projects</h1>
-                <input
-                  value={query}
-                  onChange={(e) => setQuery(e.target.value)}
-                  placeholder="Search projects"
-                  {...mark("Search projects field")}
-                />
+                <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search projects" />
                 <button
                   className="primary"
                   onClick={() => setCreating(true)}
