@@ -27,8 +27,14 @@
   "devDependencies": {
     "@sitepilot/core": "workspace:*",
     "@types/react": "^19.0.0",
-    "react": "^19.0.0"
+    "@types/react-dom": "^19.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
   },
-  "repository": { "type": "git", "url": "https://github.com/OhanaeL/sitepilot", "directory": "packages/react" },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/OhanaeL/sitepilot",
+    "directory": "packages/react"
+  },
   "keywords": ["ai", "agent", "copilot", "react", "chat-widget"]
 }
