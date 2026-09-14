@@ -1,0 +1,28 @@
+{
+  "name": "@sitepilot/core",
+  "version": "0.1.0",
+  "description": "Annotate your DOM, get an AI agent that can see it, point at it, click it and fill it. Framework-agnostic core.",
+  "license": "MIT",
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "files": ["dist", "README.md"],
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "driver.js": "^1.8.0"
+  },
+  "repository": { "type": "git", "url": "https://github.com/OhanaeL/sitepilot", "directory": "packages/core" },
+  "keywords": ["ai", "agent", "copilot", "assistant", "dom", "llm", "tool-calling", "in-app"]
+}
