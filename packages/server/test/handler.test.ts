@@ -146,3 +146,23 @@ describe("server prompt mode", () => {
     expect((up.calls[0]!.body["messages"] as unknown[]).length).toBe(1);
   });
 });
+
+describe("server-side hints", () => {
+  test("prompt.hints attach private guidance by label; DOM hints pass through", async () => {
+    const up = upstream();
+    const handler = createPilotHandler({
+      apiKey: "k", model: "m", fetch: up.fetch,
+      prompt: { system: "S", hints: { "Create project button": "Pro plan only." } },
+    });
+    await handler(post({
+      messages: [{ role: "user", content: "hi" }],
+      sitepilot: { screen: { path: "/", ambient: [
+        { key: "Create project button", description: "Create project button", tier: "ambient", hint: "Opens the dialog." },
+        { key: "Plain", description: "Plain", tier: "ambient" },
+      ], events: [], area: null }, user: null, extra: null, briefs: [], enabledTools: [] },
+    }));
+    const sys = (up.calls[0]!.body["messages"] as Array<{ content: string }>)[0]!.content;
+    expect(sys).toContain("- Create project button: Create project button — Opens the dialog. Pro plan only.");
+    expect(sys).toMatch(/- Plain: Plain$/);
+  });
+});

@@ -107,7 +107,11 @@ export function App() {
             <button className={tab === "projects" ? "on" : ""} onClick={() => setTab("projects")} {...mark("Projects nav link")}>
               Projects
             </button>
-            <button className={tab === "settings" ? "on" : ""} onClick={() => setTab("settings")} {...mark("Settings nav link")}>
+            <button
+              className={tab === "settings" ? "on" : ""}
+              onClick={() => setTab("settings")}
+              {...mark("Settings nav link", { hint: "Account settings: display name, email, password." })}
+            >
               Settings
             </button>
           </nav>
@@ -124,7 +128,13 @@ export function App() {
                   placeholder="Search projects"
                   {...mark("Search projects field")}
                 />
-                <button className="primary" onClick={() => setCreating(true)} {...mark("Create project button")}>
+                <button
+                  className="primary"
+                  onClick={() => setCreating(true)}
+                  {...mark("Create project button", {
+                    hint: "Opens the New project dialog. Free workspaces are capped at 5 projects; if the user already has 5, say so instead of clicking.",
+                  })}
+                >
                   + New project
                 </button>
               </header>
@@ -132,7 +142,11 @@ export function App() {
               <ul className="cards">
                 {visible.map((p) => (
                   <li key={p.id}>
-                    <button className="card" onClick={() => setSelected(p)} {...markItem(`Project card: ${p.name}`)}>
+                    <button
+                      className="card"
+                      onClick={() => setSelected(p)}
+                      {...markItem(`Project card: ${p.name}`, { hint: `Owner ${p.owner}, ${p.status}. Click opens its details panel.` })}
+                    >
                       <strong>{p.name}</strong>
                       <span>{p.owner}</span>
                       <em className={p.status}>{p.status}</em>

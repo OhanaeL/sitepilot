@@ -76,3 +76,27 @@ describe("parseCompletion", () => {
     expect(() => parseCompletion({ error: { message: "bad key" } })).toThrow("bad key");
   });
 });
+
+describe("hints in the prompt", () => {
+  const screen = {
+    path: "/",
+    ambient: [
+      { key: "Create project button", description: "Create project button", tier: "ambient" as const, hint: "Opens the dialog." },
+      { key: "Project card #2", description: "Project card #2", tier: "ambient" as const },
+    ],
+    events: [],
+    area: null,
+  };
+
+  test("element hints render after an em dash; label-keyed hints ignore ordinals and merge", () => {
+    const text = renderScreen(screen, 40, { "Project card": "A project the user owns.", "Create project button": "Pro plan only." });
+    expect(text).toContain("- Create project button: Create project button — Opens the dialog. Pro plan only.");
+    expect(text).toContain("- Project card #2: Project card #2 — A project the user owns.");
+  });
+
+  test("hints may be a function", () => {
+    const text = renderScreen(screen, 40, (e) => (e.key.startsWith("Project") ? "fn hint" : undefined));
+    expect(text).toContain("Project card #2 — fn hint");
+    expect(text).toContain("Create project button — Opens the dialog.\n");
+  });
+});

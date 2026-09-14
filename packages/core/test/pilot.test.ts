@@ -354,3 +354,13 @@ describe("customization", () => {
     expect(transport.requests[1]!.messages.slice(1)).toEqual([{ role: "user", content: "2" }]);
   });
 });
+
+describe("hints option", () => {
+  test("client-side hints reach the prompt and get_screen_elements", async () => {
+    document.body.innerHTML = `<button data-pilot="Save button"></button><li data-pilot-item="Card" data-pilot-hint="own hint"></li>`;
+    const transport = scripted([call("get_screen_elements", {}), { content: "ok" }]);
+    await createPilot({ transport, hints: { "Save button": "server-ish hint", Card: "map hint" } }).send("look");
+    expect(transport.requests[0]!.messages[0]!.content).toContain("- Save button: Save button — server-ish hint");
+    expect(transport.requests[1]!.messages.at(-1)).toMatchObject({ role: "tool", content: "- Card: Card — own hint map hint" });
+  });
+});

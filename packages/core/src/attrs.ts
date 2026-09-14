@@ -9,6 +9,7 @@ export type Tier = "ambient" | "item";
  * | `data-pilot`                    | Ambient: chrome and form fields, sent every turn  |
  * | `data-pilot-item`               | Item: entity cards/rows, fetched on demand        |
  * | `data-pilot-read`               | Also expose the element's rendered text           |
+ * | `data-pilot-hint`               | Hidden guidance the model reads with the element   |
  * | `data-pilot-context`            | Area grounding (what this view IS), never a target|
  * | `data-pilot-context-description`| Prose for the model to read about the area        |
  * | `data-pilot-panel`              | The agent's own UI — excluded from every scan     |
@@ -22,6 +23,7 @@ export const TIER_ATTR: Record<Tier, string> = {
 };
 
 export const READ_ATTR = "data-pilot-read";
+export const HINT_ATTR = "data-pilot-hint";
 export const PANEL_ATTR = "data-pilot-panel";
 
 export const CONTEXT_ATTR = {
@@ -33,19 +35,32 @@ export const ANY_TIER_SELECTOR = Object.values(TIER_ATTR)
   .map((a) => `[${a}]`)
   .join(", ");
 
-/** Attribute props for an ambient element: `<button {...mark("Save button")}>`. */
-export function mark(label: string): Record<string, string> {
-  return { [TIER_ATTR.ambient]: label };
+export interface MarkOptions {
+  /** Guidance only the model sees: what the element does, when to use it, caveats. */
+  hint?: string;
+  /** Expose the element's rendered text to the model too. */
+  read?: boolean;
+}
+
+function withOptions(attrs: Record<string, string>, opts?: MarkOptions): Record<string, string> {
+  if (opts?.hint) attrs[HINT_ATTR] = opts.hint;
+  if (opts?.read) attrs[READ_ATTR] = "";
+  return attrs;
+}
+
+/** Attribute props for an ambient element: `<button {...mark("Save button", { hint: "Saves the draft; safe to click." })}>`. */
+export function mark(label: string, opts?: MarkOptions): Record<string, string> {
+  return withOptions({ [TIER_ATTR.ambient]: label }, opts);
 }
 
 /** Attribute props for an on-demand item: `<li {...markItem(\`Project card: ${name}\`)}>`. */
-export function markItem(label: string): Record<string, string> {
-  return { [TIER_ATTR.item]: label };
+export function markItem(label: string, opts?: MarkOptions): Record<string, string> {
+  return withOptions({ [TIER_ATTR.item]: label }, opts);
 }
 
 /** Attribute props for a readable region the agent may quote from. */
-export function markRead(label: string, tier: Tier = "ambient"): Record<string, string> {
-  return { [TIER_ATTR[tier]]: label, [READ_ATTR]: "" };
+export function markRead(label: string, tier: Tier = "ambient", opts?: MarkOptions): Record<string, string> {
+  return withOptions({ [TIER_ATTR[tier]]: label, [READ_ATTR]: "" }, opts);
 }
 
 /** Attribute props for an area-context marker. Render on any wrapper of the view. */

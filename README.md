@@ -101,6 +101,7 @@ Run the demo: `cp examples/vite-react/.env.example examples/vite-react/.env`, fi
 | `data-pilot="Save button"` | ambient | every turn — chrome, nav, form fields, dialog controls |
 | `data-pilot-item="Project card: Acme"` | item | only when it calls `get_screen_elements` — lists can be long |
 | `data-pilot-read` (alongside one of the above) | — | with the element's rendered text included, clipped to 600 chars |
+| `data-pilot-hint="Opens the dialog. Pro plan only."` (alongside one of the above) | — | as hidden guidance after the label: what it does, when to use it, caveats. The user never sees it |
 | `data-pilot-context="projects"` + `data-pilot-context-description="…"` | — | as a sentence about what this area *is*; never a target. The innermost reachable marker wins, so a modal's context beats the page's |
 | `data-pilot-panel` | — | never — the agent's own UI is excluded from every scan |
 
@@ -176,6 +177,29 @@ const countProjects = defineTool<{ status?: "active" | "paused" }>({
 ```
 
 Tools are read every round, so an inline `defineTool` whose closure reads component state stays fresh — no memoisation needed. `execute` may return a string or `{ content, attachments }` (images the model sees this round). `ctx` gives you the current screen, the user, the strings table, and `activity()` for a transcript line.
+
+### Hidden per-element guidance (hints)
+
+A label says *what* an element is; a hint tells the model *how to think about it*, invisibly:
+
+```tsx
+<button {...mark("Create project button", {
+  hint: "Opens the New project dialog. Free plans are capped at 5 projects — if they already have 5, say so instead of clicking.",
+})}>
+```
+
+That renders into the inventory as `- Create project button: Create project button — Opens the New project dialog. Free plans…`, and into `get_screen_elements` results the same way. Plain HTML: `data-pilot-hint="…"`. Clipped at 400 chars.
+
+Attributes live in the DOM, so anyone can read them. For guidance you'd rather keep private, key it by label instead:
+
+```ts
+// client mode
+createPilot({ hints: { "Create project button": "Pro plan only.", "Project card": "Click opens its details." } })
+// server mode — never leaves the server
+createPilotHandler({ prompt: { hints: { "Password field": "NEVER read or fill this. Tell the user to change it themselves." } } })
+```
+
+Keys match the label with or without an ordinal (`"Project card"` covers `Project card #2`); a function `(element) => string | undefined` works too. DOM hints and keyed hints merge.
 
 ### The built-ins
 

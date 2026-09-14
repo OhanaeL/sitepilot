@@ -1,5 +1,5 @@
 import type { ScanOptions } from "./dom";
-import type { ScreenContext } from "./prompt";
+import type { Hints, ScreenContext } from "./prompt";
 import type { PilotStrings } from "./strings";
 
 /** OpenAI-compatible function tool definition. */
@@ -41,6 +41,7 @@ export interface ToolContext {
   enabledTools: readonly string[];
   user: PilotUser | null;
   strings: PilotStrings;
+  hints: Hints | undefined;
   /** Post a line to the chat transcript ("Clicked Save button"). */
   activity(text: string): void;
   /** Send a follow-up user turn once the current one finishes. */
