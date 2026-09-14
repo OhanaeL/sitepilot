@@ -1,5 +1,5 @@
 import { markPanel } from "@sitepilot/core";
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { usePilot, useSitepilot } from "./provider";
 
 const STYLE_ID = "sitepilot-widget-css";
@@ -27,6 +27,8 @@ const CSS = `
 .sp-send{padding:0 14px;border:0;border-radius:10px;background:var(--sp-accent);color:#fff;font:inherit;cursor:pointer}
 .sp-send:disabled{opacity:.5;cursor:default}
 .sp-empty{color:var(--sp-muted);text-align:center;margin:auto;padding:0 20px}
+.sp-footer{font-size:11px;color:var(--sp-muted);text-align:center;padding:0 12px 8px}
+.sp-footer a{color:inherit}
 `;
 
 function ensureStyles(): void {
@@ -54,6 +56,8 @@ export interface SitepilotWidgetProps {
   showToolToggles?: boolean;
   /** Labels for the consent toggles, by tool name. Merged over the built-in labels. */
   toolLabels?: Record<string, string>;
+  /** Rendered under the composer, e.g. a "Powered by" line. */
+  footer?: ReactNode;
 }
 
 export function SitepilotWidget({
@@ -63,6 +67,7 @@ export function SitepilotWidget({
   defaultOpen = false,
   showToolToggles = true,
   toolLabels,
+  footer,
 }: SitepilotWidgetProps) {
   const labels = { ...TOOL_LABELS, ...toolLabels };
   const pilot = usePilot();
@@ -147,6 +152,7 @@ export function SitepilotWidget({
               Send
             </button>
           </form>
+          {footer && <div className="sp-footer">{footer}</div>}
         </div>
       )}
     </div>

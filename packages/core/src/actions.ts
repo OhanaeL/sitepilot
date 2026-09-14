@@ -27,12 +27,39 @@ const NOT_ON_SCREEN = "That element isn't on this screen right now.";
 
 let active: Driver | null = null;
 let advanceCleanup: (() => void) | null = null;
+let trackCleanup: (() => void) | null = null;
 
 export function clearHighlight(): void {
   advanceCleanup?.();
   advanceCleanup = null;
+  trackCleanup?.();
+  trackCleanup = null;
   active?.destroy();
   active = null;
+}
+
+// driver.js re-anchors only on window scroll; a target inside a scrolling or
+// resizing container (a carousel, a collapsing panel) would drift out of the
+// cutout, so every capture-phase scroll and any size change refreshes it.
+function trackTarget(el: HTMLElement): () => void {
+  let pending = false;
+  const refresh = () => {
+    if (pending || !active) return;
+    pending = true;
+    setTimeout(() => {
+      pending = false;
+      active?.refresh();
+    }, 50);
+  };
+  window.addEventListener("scroll", refresh, true);
+  window.addEventListener("resize", refresh);
+  const observer = new ResizeObserver(refresh);
+  observer.observe(el);
+  return () => {
+    window.removeEventListener("scroll", refresh, true);
+    window.removeEventListener("resize", refresh);
+    observer.disconnect();
+  };
 }
 
 function nudgePopoverFromEdges(): void {
@@ -128,6 +155,8 @@ export async function highlight(key: string, opts: HighlightOptions = {}): Promi
     if (settled) return;
     settled = true;
     advanceCleanup?.();
+    trackCleanup?.();
+    trackCleanup = null;
     active?.destroy();
     active = null;
     cb?.();
@@ -146,6 +175,8 @@ export async function highlight(key: string, opts: HighlightOptions = {}): Promi
       const wasSettled = settled;
       settled = true;
       advanceCleanup?.();
+      trackCleanup?.();
+      trackCleanup = null;
       active?.destroy();
       active = null;
       if (!wasSettled) opts.onCancel?.();
@@ -162,6 +193,7 @@ export async function highlight(key: string, opts: HighlightOptions = {}): Promi
       showButtons: ["close"],
     },
   });
+  trackCleanup = trackTarget(el);
 
   if (opts.onAdvance) {
     const removeRing = createClickRing(el);
