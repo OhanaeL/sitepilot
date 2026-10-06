@@ -1,4 +1,4 @@
-import { beginAgentAction, endAgentAction, type PilotPlugin, type PilotTool, type ToolOutput } from "@sitepilot/core";
+import { beginAgentAction, endAgentAction, scanAll, type PilotPlugin, type PilotTool, type ToolOutput } from "@sitepilot/core";
 import { COORD_MAX, MAX_ACTIONS, parseBatch, REJECTED, SCHEMA, type Action } from "./batch";
 import {
   elementAt,
@@ -57,7 +57,7 @@ const settle = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, m
 function focusedField(root?: ParentNode): HTMLInputElement | HTMLTextAreaElement | null {
   const active = (root instanceof Document ? root : document).activeElement;
   if (!(active instanceof HTMLElement)) return null;
-  if (!active.closest("[data-pilot], [data-pilot-item]")) return null;
+  if (!scanAll(root).some((e) => e.el.contains(active))) return null;
   if (active instanceof HTMLInputElement || active instanceof HTMLTextAreaElement) return active;
   return active.querySelector<HTMLInputElement | HTMLTextAreaElement>("input, textarea");
 }
