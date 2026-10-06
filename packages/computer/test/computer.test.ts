@@ -87,6 +87,21 @@ describe("frame geometry", () => {
     expect(elementAt(400, 800, vp)?.key).toBe("Card");
     expect(elementAt(900, 900, vp)).toBeNull();
   });
+
+  test("elementAt picks the topmost box when unrelated opted-in boxes overlap", () => {
+    document.body.innerHTML = `<div id="card" data-pilot-item="Card"></div><div id="menu" data-pilot="Delete option"></div>`;
+    const card = document.getElementById("card")!;
+    const menu = document.getElementById("menu")!;
+    place(card, 0, 0, 500, 500);
+    place(menu, 100, 100, 200, 50);
+    const original = document.elementsFromPoint;
+    document.elementsFromPoint = () => [menu, card, document.body];
+    try {
+      expect(elementAt(200, 250, vp)?.key).toBe("Delete option");
+    } finally {
+      document.elementsFromPoint = original;
+    }
+  });
 });
 
 describe("computer tool through the pilot", () => {
@@ -159,6 +174,25 @@ describe("computer tool through the pilot", () => {
       requested: 3,
       failed: { index: 1, do: "click", why: expect.stringContaining("no opted-in element") },
     });
+  });
+
+  test("type works in a field opted in by the manifest", async () => {
+    document.body.innerHTML = `<input id="q">`;
+    const field = document.getElementById("q") as HTMLInputElement;
+    place(field, 0, 0, 500, 50);
+    const transport = scripted([
+      computer({
+        actions: [
+          { do: "click", x: 250, y: 50 },
+          { do: "type", text: "acme" },
+        ],
+      }),
+      { content: "done" },
+    ]);
+    const manifest = { elements: [{ selector: "#q", label: "Search field" }] };
+    await createPilot({ transport, plugins, manifest }).send("search acme");
+    expect(lastOutcome(transport)).toMatchObject({ executed: 2, failed: null });
+    expect(field.value).toBe("acme");
   });
 
   test("type with nothing focused fails", async () => {
