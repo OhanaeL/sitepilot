@@ -31,5 +31,6 @@ bun run dev:example
 - **Tool attachments are turn-scoped** (`stripEphemeralMedia`). Do not persist images across user turns.
 - **driver.js CSS is inlined** at build (`loader: {".css": "text"}` + `noExternal`) and injected once by `ensureStyles()`. Consumers need no CSS import.
 - **Widget z-index is 10002**: above driver's overlay (10000) and click ring (10001), below its popover (1e9), so captions render over the panel.
-- Wire format is OpenAI chat completions end to end; keep `@sitepilot/server` a passthrough that validates, never one that reshapes.
-- Git identity for this repo is the OhanaeL account (set locally); co-author trailer is `linn-dev-gmi`, no AI attribution lines.
+- Wire format is OpenAI chat completions end to end; keep `@sitepilot/server` a passthrough that validates, never one that reshapes. The one exception is the optional `router` (`jevRouter`, `src/jev.ts`): it may answer a round itself, and must then answer in that same completion shape.
+- **`jevRouter` is stateless and keys on tool-call ids.** Jev's calls are `jev_`-prefixed. Any other assistant message in the current turn (since the last string user message) means the LLM owns the rest of that turn. Jev picks values and never writes text: a tool qualifies only when every required argument is a `target` element key, a string `enum` or a boolean. Its one image path: an empty `computer` batch ("look"), at most once per turn. The frame is used only in the round right after that look, because the screen goes stale after Jev's next action.
+- Git identity for this repo is the OhanaeL account (set locally); no co-author trailer and no AI attribution lines.

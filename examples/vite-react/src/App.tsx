@@ -1,10 +1,11 @@
 import { computerPlugin } from "@sitepilot/computer";
 import { openaiTransport } from "@sitepilot/core";
 import { defineTool, mark, markContext, markItem, markRead, SitepilotProvider, SitepilotWidget } from "@sitepilot/react";
+import { toCanvas } from "html-to-image";
 import { useState } from "react";
 
 const transport = openaiTransport({ url: "/api/pilot" });
-const plugins = [computerPlugin()];
+const plugins = [computerPlugin({ renderElement: (el) => toCanvas(el) })];
 const HISTORY_KEY = "acme-pilot-history";
 
 function savedHistory() {

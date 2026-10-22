@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { resolveKey, scanAll, scanAmbient, scanContext, scanItems } from "../src/dom";
-import { clearEvents, getEvents, installEventsBuffer } from "../src/events";
+import { beginAgentAction, clearEvents, getEvents, installEventsBuffer, resetEventCapture } from "../src/events";
 import { loadManifest, renderLabel, setManifest } from "../src/manifest";
 import { createPilot } from "../src/pilot";
 import type { CompletionReply, CompletionRequest, Transport } from "../src/transport";
@@ -74,6 +74,15 @@ describe("manifest-driven scanning", () => {
   test("the events buffer records clicks on manifest-matched elements", () => {
     installEventsBuffer();
     clearEvents();
+    document.body.innerHTML = `<div class="card"><span class="title">Apollo</span></div>`;
+    document.querySelector("span")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    expect(getEvents()[0]).toMatchObject({ type: "click", key: "Project card: Apollo", tier: "item" });
+  });
+
+  test("resetEventCapture clears a pending agent-action window so capture resumes", () => {
+    installEventsBuffer();
+    beginAgentAction();
+    resetEventCapture();
     document.body.innerHTML = `<div class="card"><span class="title">Apollo</span></div>`;
     document.querySelector("span")!.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     expect(getEvents()[0]).toMatchObject({ type: "click", key: "Project card: Apollo", tier: "item" });
