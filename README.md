@@ -274,6 +274,28 @@ createPilotHandler({
 
 The tool *result* strings still come from the browser (they're produced where the tool runs); use `strings` for those.
 
+### A fast brain in front of the LLM (`router`)
+
+Most requests to an in-app agent are "where is X" or "open X": one highlight or one click, no words needed. `jevRouter` puts [TypeSafe](https://docs.typesafe.ai)'s Jev in front of the LLM. Each round, Jev decides whether it can run the step itself (~0.3 s) or whether the request needs the LLM:
+
+```ts
+import { createPilotHandler, jevRouter } from "@sitepilot/server";
+
+createPilotHandler({
+  apiKey, model,
+  router: jevRouter({ apiKey: process.env.TYPESAFE_API_KEY! }),
+});
+```
+
+- **Jev only picks, it never writes.** It runs a tool only when every required argument is an element `target`, a string `enum` or a boolean, so `fill_field` (free text) always goes to the LLM. By default it may call only `highlight_element` and `click_element`; drop `click_element` from `tools` if you'd rather Jev never act on the page unsupervised. Opt other tools in with `tools: [...]`, but only ones whose effect the user can see, because Jev's closing line is a fixed `reply` ("Here it is." / "Done.").
+- **It loops, then hands off.** After each step, Jev checks whether the request is done. If it is, Jev closes the turn. If not, it takes the next step, up to `maxSteps` (3). Anything uncertain goes to the LLM, as does anything that needs an answer in words, a failed step, or a repeated step. Once the LLM has spoken in a turn, it keeps that turn. Jev's tool calls carry `jev_`-prefixed ids, so the server stays stateless.
+- **It can look.** With [`@sitepilot/computer`](#computer-use-plugin-sitepilotcomputer) installed and allowed, Jev may hit a request that points at something the text list can't settle, like "press the blue button" or "open the project Linus owns". It then takes one frame per turn (an empty `computer` batch) and picks the element from the picture. Project cards and other items in the frame count. This only helps with real pixels: pass `renderElement` (e.g. `html-to-image`'s `toCanvas`), because the default labelled-box frame tells Jev nothing the text list doesn't. The frame goes to TypeSafe, and `look: false` turns this off.
+- **It needs `prompt: "server"`.** The element keys Jev chooses from come from the `sitepilot` context. In client mode there is nothing to target, so every round goes to the LLM.
+- **Every judgment that acts must clear `threshold`** (0.7): "nothing needs saying", the tool, the target and each argument, and the picked target or `enum` must be one Jev was offered. The one exception is the decision to *look*, which fires on a lower fixed bar (0.5) because a frame only gathers more context, it doesn't act. `onRoute` receives every decision with Jev's raw answers, so you can tune it on your own pages. Any Jev error falls through to the LLM.
+- **What reaches TypeSafe.** Turning the router on sends each round to TypeSafe: the user's request, the on-screen element keys and descriptions (including server-side `hints`), `app_facts` from `prompt.extra`, and the recent transcript — plus a screenshot when Jev looks. All of it is for the routing decision; `look: false` withholds only the image. Keep anything you don't want leaving the server out of hints/extra, or leave the router off for those routes.
+
+`router` is a plain `(input) => Promise<{ route: "llm" } | { route: "self", content, toolCalls }>`, so you can plug in your own. A `self` answer goes back to the browser in the usual chat-completions shape.
+
 ### History
 
 ```ts

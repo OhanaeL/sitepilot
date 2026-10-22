@@ -1,4 +1,6 @@
+import { beforeEach } from "bun:test";
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { resetEventCapture } from "../packages/core/src/events";
 
 // happy-dom swaps in browser-flavoured fetch primitives (its Request drops
 // forbidden headers such as Origin); the server package needs Bun's real ones.
@@ -18,3 +20,5 @@ if (typeof globalThis.ResizeObserver === "undefined") {
     disconnect() {}
   } as unknown as typeof ResizeObserver;
 }
+
+beforeEach(resetEventCapture);

@@ -137,3 +137,10 @@ export function clearEvents(): void {
   buffer = [];
   emit();
 }
+
+export function resetEventCapture(): void {
+  buffer = [];
+  listeners.clear();
+  agentActingDepth = 0;
+  agentActingUntil = 0;
+}

@@ -1,4 +1,29 @@
-import { buildSystemPrompt, type PromptContext, type PromptOptions } from "@sitepilot/core/prompt";
+import { buildSystemPrompt, hintFor, type PromptContext, type PromptOptions } from "@sitepilot/core/prompt";
+
+export { jevRouter, JEV_CALL_PREFIX, type JevAnswer, type JevRouteEvent, type JevRouterOptions } from "./jev";
+
+export interface RoutedCall {
+  id: string;
+  name: string;
+  args: Record<string, unknown>;
+}
+
+export interface RouteInput {
+  /** The validated browser messages, without the server's system prompt. */
+  messages: Record<string, unknown>[];
+  /** The validated tools offered this round (descriptions already rewritten). */
+  tools: Record<string, unknown>[];
+  /** The server-mode context, with server `prompt.hints` and `prompt.extra` merged in. Null in client mode. */
+  context: PromptContext | null;
+  signal: AbortSignal;
+}
+
+/** `llm` forwards the round upstream; `self` answers it here, in the same chat-completions shape. */
+export type RouteDecision =
+  | { route: "llm" }
+  | { route: "self"; content: string | null; toolCalls: RoutedCall[]; model?: string };
+
+export type PilotRouter = (input: RouteInput) => Promise<RouteDecision>;
 
 /**
  * `PromptOptions` plus server-only hooks. `hints` maps element labels to
@@ -40,6 +65,8 @@ export interface PilotHandlerOptions {
    * requests (no `Origin` header, or one matching the request host) always pass.
    */
   allowOrigins?: string[];
+  /** Decides per round whether to answer without the LLM, e.g. `jevRouter({ apiKey })`. */
+  router?: PilotRouter;
   fetch?: typeof fetch;
 }
 
@@ -182,6 +209,23 @@ function cleanContext(raw: unknown): PromptContext | null {
   };
 }
 
+function completionOf(decision: Extract<RouteDecision, { route: "self" }>): Json {
+  const toolCalls = decision.toolCalls.map((c) => ({ id: c.id, type: "function", function: { name: c.name, arguments: JSON.stringify(c.args) } }));
+  return {
+    id: `chatcmpl-${crypto.randomUUID()}`,
+    object: "chat.completion",
+    created: Math.floor(Date.now() / 1000),
+    model: decision.model ?? "router",
+    choices: [
+      {
+        index: 0,
+        message: { role: "assistant", content: decision.content, ...(toolCalls.length && { tool_calls: toolCalls }) },
+        finish_reason: toolCalls.length ? "tool_calls" : "stop",
+      },
+    ],
+  };
+}
+
 /**
  * Build a `(Request) => Promise<Response>` handler for `/api/pilot`. Mount it in
  * a Next.js route handler, Hono, Bun.serve, Cloudflare Workers, or wrap it with
@@ -215,15 +259,36 @@ export function createPilotHandler(options: PilotHandlerOptions): (req: Request)
       ? body["tools"].map((t) => cleanTool(t, options.toolDescriptions ?? {})).filter(Boolean)
       : [];
 
+    const context = cleanContext(body["sitepilot"]);
+    const { extra, ...promptOptions } = options.prompt ?? {};
+    const ctx: PromptContext | null = context && {
+      ...context,
+      extra: [context.extra, extra ? await extra(context, req) : null].filter(Boolean).join("\n\n") || null,
+    };
+
+    if (options.router) {
+      const decision = await options.router({
+        messages: messages as Json[],
+        tools: tools as Json[],
+        context: ctx && {
+          ...ctx,
+          screen: {
+            ...ctx.screen,
+            ambient: ctx.screen.ambient.map((e) => {
+              const { hint: _, ...rest } = e;
+              const hint = hintFor(e, promptOptions.hints);
+              return { ...rest, ...(hint && { hint }) };
+            }),
+          },
+        },
+        signal: req.signal,
+      });
+      if (decision.route === "self") return json(200, completionOf(decision));
+    }
+
     const system: Json[] = [];
     if (options.systemPrompt) system.push({ role: "system", content: options.systemPrompt });
-    const context = cleanContext(body["sitepilot"]);
-    if (context) {
-      const { extra, ...promptOptions } = options.prompt ?? {};
-      const serverExtra = extra ? await extra(context, req) : null;
-      const ctx: PromptContext = { ...context, extra: [context.extra, serverExtra].filter(Boolean).join("\n\n") || null };
-      system.push({ role: "system", content: buildSystemPrompt(ctx, promptOptions) });
-    }
+    if (ctx) system.push({ role: "system", content: buildSystemPrompt(ctx, promptOptions) });
     const user = isStr(body["user"]) ? body["user"].slice(0, 256) : undefined;
 
     const upstream = await doFetch(`${baseURL}/chat/completions`, {
