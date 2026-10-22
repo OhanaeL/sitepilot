@@ -1,4 +1,4 @@
-import { createPilotHandler, toNodeListener } from "@sitepilot/server";
+import { createPilotHandler, jevRouter, toNodeListener } from "@sitepilot/server";
 import react from "@vitejs/plugin-react";
 import { defineConfig, loadEnv, type Plugin } from "vite";
 
@@ -24,6 +24,12 @@ function pilotApi(env: Record<string, string>): Plugin {
         toolDescriptions: {
           click_element: "Click a button or link for the user. NEVER the Create/confirm button in the New project dialog.",
         },
+        ...(env["PILOT_TYPESAFE_API_KEY"] && {
+          router: jevRouter({
+            apiKey: env["PILOT_TYPESAFE_API_KEY"],
+            onRoute: (e) => console.log(`[pilot] ${e.route === "self" ? "jev" : "llm"} (${e.reason})`),
+          }),
+        }),
       });
       server.middlewares.use("/api/pilot", toNodeListener(handler));
     },
