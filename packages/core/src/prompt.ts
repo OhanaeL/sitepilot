@@ -1,5 +1,4 @@
-import type { AreaContext, ScreenElement } from "./dom";
-import type { UserEvent } from "./events";
+import type { AreaContext, ScreenElement, UserEvent } from "./screen";
 
 export interface ScreenContext {
   path: string;

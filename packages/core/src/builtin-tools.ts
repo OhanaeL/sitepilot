@@ -1,6 +1,7 @@
 import { click, fill, highlight } from "./actions";
-import { scanItems, type ScreenElement } from "./dom";
+import { scanItems } from "./dom";
 import { renderElement, type Hints } from "./prompt";
+import type { ScreenElement } from "./screen";
 import { patchTool, type PilotTool, type ToolSpec } from "./tools";
 
 export type ActionToolName = "highlight_element" | "click_element" | "fill_field";

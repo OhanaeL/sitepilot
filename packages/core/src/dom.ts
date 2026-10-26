@@ -1,23 +1,9 @@
 import { ANY_TIER_SELECTOR, CONTEXT_ATTR, HINT_ATTR, PANEL_ATTR, READ_ATTR, TIER_ATTR, type Tier } from "./attrs";
 import { manifestAreas, manifestRules, renderLabel, safeQueryAll } from "./manifest";
-
-export interface ScreenElement {
-  /** The key the model targets — the label, ordinal-suffixed on collision (`Project card #2`). */
-  key: string;
-  /** Label plus the field's current value or readable text, when present. */
-  description: string;
-  tier: Tier;
-  /** `data-pilot-hint`: guidance for the model, never shown to the user. */
-  hint?: string;
-}
+import type { AreaContext, ScreenElement } from "./screen";
 
 export interface ScannedElement extends ScreenElement {
   el: HTMLElement;
-}
-
-export interface AreaContext {
-  topic: string;
-  description: string;
 }
 
 export interface ScanOptions {

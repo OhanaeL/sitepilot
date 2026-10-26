@@ -4,7 +4,7 @@
   "workspaces": ["packages/*", "examples/*"],
   "scripts": {
     "build": "bun run --filter './packages/*' build",
-    "typecheck": "bun run --filter './packages/*' typecheck",
+    "typecheck": "bun run --filter './packages/*' --filter './examples/*' typecheck",
     "test": "bun test --conditions=@sitepilot/source",
     "dev:example": "bun run --filter sitepilot-example-vite-react dev"
   },
