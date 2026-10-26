@@ -124,6 +124,57 @@ describe("createPilot", () => {
     ]);
   });
 
+  test("a restored history with a call left open is repaired in place before the next turn", async () => {
+    const transport = scripted([{ content: "ok" }]);
+    const pilot = createPilot({ transport });
+    pilot.loadHistory([
+      { role: "user", content: "one" },
+      {
+        role: "assistant",
+        content: null,
+        tool_calls: [{ id: "z1", type: "function", function: { name: "click_element", arguments: "{}" } }],
+      },
+      { role: "user", content: "later" },
+    ]);
+    await pilot.send("now");
+    const sent = transport.requests[0]!.messages.slice(1);
+    expect(sent.map((m) => [m.role, m.role === "tool" ? m.tool_call_id : m.content])).toEqual([
+      ["user", "one"],
+      ["assistant", null],
+      ["tool", "z1"],
+      ["user", "later"],
+      ["user", "now"],
+    ]);
+  });
+
+  test("a click the user stops while it waits for its element never lands", async () => {
+    const transport = scripted([call("click_element", { target: "Save" })]);
+    const pilot = createPilot({ transport });
+    const sent = pilot.send("save");
+    await new Promise((r) => setTimeout(r, 20));
+    pilot.stop();
+    let clicks = 0;
+    document.body.innerHTML = `<button data-pilot="Save"></button>`;
+    document.querySelector("button")!.addEventListener("click", () => clicks++);
+    await sent;
+    await new Promise((r) => setTimeout(r, 200));
+    expect(clicks).toBe(0);
+    expect(pilot.getState().messages.map((m) => m.role)).toEqual(["user"]);
+  });
+
+  test("keys resolve inside scan.root, the same place the prompt listed them", async () => {
+    document.body.innerHTML = `
+      <button id="out" data-pilot="Save"></button>
+      <main id="app"><button id="in" data-pilot="Save"></button></main>`;
+    let clicked = "";
+    for (const b of document.querySelectorAll("button")) b.addEventListener("click", () => (clicked = b.id));
+    const transport = scripted([call("click_element", { target: "Save" }), { content: "saved" }]);
+    const pilot = createPilot({ transport, scan: { root: document.getElementById("app")! } });
+    await pilot.send("save");
+    expect(transport.requests[0]!.messages[0]?.content).toContain("- Save");
+    expect(clicked).toBe("in");
+  });
+
   test("fill updates a controlled-style input and dispatches input", async () => {
     document.body.innerHTML = `<input data-pilot="Name field">`;
     const input = document.querySelector("input")!;

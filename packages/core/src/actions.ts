@@ -8,7 +8,14 @@ export interface ActionResult {
   reason?: string;
 }
 
-export interface HighlightOptions {
+export interface ActOptions {
+  /** The scan's root (`scan.root`), so keys resolve against what the prompt listed. */
+  root?: ParentNode | undefined;
+  /** Once aborted, the action gives up without touching the page. */
+  signal?: AbortSignal | undefined;
+}
+
+export interface HighlightOptions extends ActOptions {
   title?: string;
   description?: string;
   /** Fires once if the user clicks the highlighted element. */
@@ -24,6 +31,7 @@ const POPOVER_EDGE_MARGIN_PX = 24;
 const RING_Z_INDEX = 10001;
 const RING_INSET_PX = 4;
 const NOT_ON_SCREEN = "That element isn't on this screen right now.";
+const STOPPED: ActionResult = { ok: false, reason: "The user stopped it." };
 
 let active: Driver | null = null;
 let advanceCleanup: (() => void) | null = null;
@@ -127,14 +135,14 @@ function createClickRing(el: HTMLElement): () => void {
   };
 }
 
-function waitForKey(key: string, timeoutMs: number): Promise<HTMLElement | null> {
-  const immediate = resolveKey(key);
+function waitForKey(key: string, timeoutMs: number, { root, signal }: ActOptions): Promise<HTMLElement | null> {
+  const immediate = resolveKey(key, root);
   if (immediate) return Promise.resolve(immediate);
   return new Promise((resolve) => {
     const start = Date.now();
     const interval = setInterval(() => {
-      const el = resolveKey(key);
-      if (el || Date.now() - start >= timeoutMs) {
+      const el = signal?.aborted ? null : resolveKey(key, root);
+      if (el || signal?.aborted || Date.now() - start >= timeoutMs) {
         clearInterval(interval);
         resolve(el);
       }
@@ -143,12 +151,14 @@ function waitForKey(key: string, timeoutMs: number): Promise<HTMLElement | null>
 }
 
 export async function highlight(key: string, opts: HighlightOptions = {}): Promise<ActionResult> {
-  const el = await waitForKey(key, opts.waitMs ?? ELEMENT_WAIT_MS);
+  const el = await waitForKey(key, opts.waitMs ?? ELEMENT_WAIT_MS, opts);
+  if (opts.signal?.aborted) return STOPPED;
   if (!el) return { ok: false, reason: NOT_ON_SCREEN };
 
   ensureStyles();
   clearHighlight();
   await scrollIntoViewSettled(el);
+  if (opts.signal?.aborted) return STOPPED;
 
   let settled = false;
   const settleWith = (cb?: () => void) => {
@@ -216,11 +226,13 @@ export async function highlight(key: string, opts: HighlightOptions = {}): Promi
   return { ok: true };
 }
 
-export async function click(key: string): Promise<ActionResult> {
-  const el = await waitForKey(key, ELEMENT_WAIT_MS);
+export async function click(key: string, opts: ActOptions = {}): Promise<ActionResult> {
+  const el = await waitForKey(key, ELEMENT_WAIT_MS, opts);
+  if (opts.signal?.aborted) return STOPPED;
   if (!el) return { ok: false, reason: NOT_ON_SCREEN };
   clearHighlight();
   await scrollIntoViewSettled(el);
+  if (opts.signal?.aborted) return STOPPED;
   beginAgentAction();
   try {
     el.click();
@@ -230,8 +242,9 @@ export async function click(key: string): Promise<ActionResult> {
   return { ok: true };
 }
 
-export async function fill(key: string, text: string): Promise<ActionResult> {
-  const el = await waitForKey(key, ELEMENT_WAIT_MS);
+export async function fill(key: string, text: string, opts: ActOptions = {}): Promise<ActionResult> {
+  const el = await waitForKey(key, ELEMENT_WAIT_MS, opts);
+  if (opts.signal?.aborted) return STOPPED;
   if (!el) return { ok: false, reason: "That field isn't on this screen right now." };
   const field =
     el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement
@@ -240,6 +253,7 @@ export async function fill(key: string, text: string): Promise<ActionResult> {
   if (!field) return { ok: false, reason: "That target isn't a text field." };
   clearHighlight();
   await scrollIntoViewSettled(field);
+  if (opts.signal?.aborted) return STOPPED;
   field.focus();
   // Native setter + input event so React/Vue controlled inputs pick the value up.
   const proto = field instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype;

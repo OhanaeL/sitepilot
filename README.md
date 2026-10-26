@@ -315,7 +315,7 @@ history: {
 
 ## Writing a plugin
 
-A plugin is `{ name, tools?, brief? }`. A tool is an OpenAI function spec plus `execute(args, ctx)` returning a string or `{ content, attachments }`. `kind: "action"` tools are consent-gated; `kind: "utility"` tools ride along whenever any action is enabled.
+A plugin is `{ name, tools?, brief? }`. A tool is an OpenAI function spec plus `execute(args, ctx)` returning a string or `{ content, attachments }`. `ctx.signal` aborts when the user presses stop: check it before acting on the page. `kind: "action"` tools are consent-gated; `kind: "utility"` tools ride along whenever any action is enabled.
 
 ```ts
 const clock: PilotPlugin = {

@@ -131,6 +131,25 @@ export function defaultTrim(history: ChatMessage[], max: number): ChatMessage[] 
   return out;
 }
 
+// The API rejects a tool call whose result doesn't follow it directly. A stopped
+// run, or a history saved before this repair existed, can leave calls open.
+function answerOpenCalls(history: HistoryEntry[], content: string): HistoryEntry[] {
+  const out: HistoryEntry[] = [];
+  let open: string[] = [];
+  const close = () => {
+    out.push(...open.map((id): HistoryEntry => ({ role: "tool", tool_call_id: id, content })));
+    open = [];
+  };
+  for (const m of history) {
+    if (m.role === "tool") open = open.filter((id) => id !== m.tool_call_id);
+    else close();
+    out.push(m);
+    if (m.role === "assistant") open = m.tool_calls?.map((c) => c.id) ?? [];
+  }
+  close();
+  return out;
+}
+
 // Images are for the round that produced them; re-sending every past screenshot
 // on every later turn would grow each request by the whole conversation.
 function stripEphemeralMedia(history: HistoryEntry[], omitted: string): HistoryEntry[] {
@@ -233,7 +252,8 @@ export function createPilot(options: PilotOptions): Pilot {
     enabledTools: [...state.enabledTools],
   });
 
-  const toolContext = (by: string | undefined): ToolContext => ({
+  const toolContext = (by: string | undefined, signal: AbortSignal): ToolContext => ({
+    signal,
     screen: collectScreen,
     scan: options.scan,
     strings,
@@ -257,6 +277,7 @@ export function createPilot(options: PilotOptions): Pilot {
   async function executeTool(
     call: ToolCall,
     by: string | undefined,
+    signal: AbortSignal,
   ): Promise<{ content: string; attachments: ContentPart[] }> {
     const tool = tools().find((t) => t.spec.function.name === call.name);
     if (!tool) return { content: strings.unknownTool(call.name), attachments: [] };
@@ -266,7 +287,7 @@ export function createPilot(options: PilotOptions): Pilot {
       return { content: strings.toolNotEnabled(call.name), attachments: [] };
     }
     try {
-      const out = await tool.execute(call.args, toolContext(by));
+      const out = await tool.execute(call.args, toolContext(by, signal));
       return typeof out === "string"
         ? { content: out, attachments: [] }
         : { content: out.content, attachments: out.attachments ?? [] };
@@ -296,7 +317,7 @@ export function createPilot(options: PilotOptions): Pilot {
   async function runTools(calls: ToolCall[], signal: AbortSignal, by: string | undefined): Promise<void> {
     const attachments: ContentPart[] = [];
     for (const call of calls) {
-      const out = await executeTool(call, by);
+      const out = await executeTool(call, by, signal);
       if (signal.aborted) return;
       record({ role: "tool", tool_call_id: call.id, content: out.content });
       attachments.push(...out.attachments);
@@ -330,18 +351,6 @@ export function createPilot(options: PilotOptions): Pilot {
     return "capped";
   }
 
-  // A stopped run can leave tool calls unanswered, and the API rejects a
-  // history where any tool call lacks a result right after it.
-  function answerOpenCalls(): void {
-    const last = history.map((m) => m.role).lastIndexOf("assistant");
-    const open = history[last];
-    if (open?.role !== "assistant" || !open.tool_calls) return;
-    const answered = new Set(history.slice(last + 1).map((m) => m.role === "tool" && m.tool_call_id));
-    for (const call of open.tool_calls) {
-      if (!answered.has(call.id)) record({ role: "tool", tool_call_id: call.id, content: strings.stopped });
-    }
-  }
-
   async function send(text: string): Promise<void> {
     const trimmed = text.trim();
     if (!trimmed) return;
@@ -354,8 +363,7 @@ export function createPilot(options: PilotOptions): Pilot {
     const run = new AbortController();
     abort = run;
     push("user", trimmed);
-    history = stripEphemeralMedia(history, strings.screenshotOmitted);
-    answerOpenCalls();
+    history = answerOpenCalls(stripEphemeralMedia(history, strings.screenshotOmitted), strings.stopped);
     record({ role: "user", content: trimmed });
     set({ status: "thinking", error: manifestError });
 

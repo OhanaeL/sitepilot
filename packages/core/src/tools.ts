@@ -47,6 +47,8 @@ export interface ToolContext {
   /** Send a follow-up user turn once the current one finishes. */
   enqueueUserTurn(text: string): void;
   setHighlight(key: string | null): void;
+  /** Aborts when the user stops the run: check it before acting on the page. */
+  signal: AbortSignal;
 }
 
 export interface PilotTool {

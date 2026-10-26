@@ -44,6 +44,8 @@ export const highlightTool: PilotTool = {
     const message = typeof args["message"] === "string" ? args["message"] : key;
     const { strings } = ctx;
     const result = await highlight(key, {
+      root: ctx.scan?.root,
+      signal: ctx.signal,
       description: message,
       onAdvance: () => {
         ctx.setHighlight(null);
@@ -55,6 +57,7 @@ export const highlightTool: PilotTool = {
         ctx.activity(strings.activity.dismissed(key));
       },
     });
+    if (ctx.signal.aborted) return strings.stopped;
     if (!result.ok) return strings.highlightFailed(key, result.reason ?? "");
     ctx.setHighlight(key);
     ctx.activity(strings.activity.highlighted(key));
@@ -76,7 +79,8 @@ export const clickTool: PilotTool = {
   async execute(args, ctx) {
     const key = String(args["target"] ?? "");
     const { strings } = ctx;
-    const result = await click(key);
+    const result = await click(key, { root: ctx.scan?.root, signal: ctx.signal });
+    if (ctx.signal.aborted) return strings.stopped;
     ctx.activity(result.ok ? strings.activity.clicked(key) : strings.activity.clickFailed(key));
     await settle(STEP_SETTLE_MS);
     return result.ok ? strings.clicked(key) : strings.clickFailed(key, result.reason ?? "");
@@ -104,7 +108,8 @@ export const fillTool: PilotTool = {
     const key = String(args["target"] ?? "");
     const text = typeof args["text"] === "string" ? args["text"] : "";
     const { strings } = ctx;
-    const result = await fill(key, text);
+    const result = await fill(key, text, { root: ctx.scan?.root, signal: ctx.signal });
+    if (ctx.signal.aborted) return strings.stopped;
     ctx.activity(result.ok ? strings.activity.filled(key, text) : strings.activity.fillFailed(key));
     await settle(STEP_SETTLE_MS);
     return result.ok ? strings.filled(key, text) : strings.fillFailed(key, result.reason ?? "");
