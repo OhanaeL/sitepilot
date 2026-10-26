@@ -21,7 +21,7 @@ export interface Viewport {
   h: number;
 }
 
-export type FrameRenderer = (elements: FrameElement[], viewport: Viewport) => Promise<string | null>
+export type FrameRenderer = (elements: FrameElement[], viewport: Viewport) => Promise<string | null>;
 
 export type ElementRenderer = (el: HTMLElement) => Promise<CanvasImageSource>;
 
@@ -31,7 +31,8 @@ export function viewport(): Viewport {
   return { w: window.innerWidth, h: window.innerHeight };
 }
 
-const norm = (px: number, size: number): number => Math.max(0, Math.min(COORD_MAX, Math.round((px / size) * (COORD_MAX + 1))));
+const norm = (px: number, size: number): number =>
+  Math.max(0, Math.min(COORD_MAX, Math.round((px / size) * (COORD_MAX + 1))));
 
 export function toNormRect(r: DOMRect, vp: Viewport): NormRect {
   const x = norm(r.left, vp.w);

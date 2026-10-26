@@ -41,7 +41,8 @@ export function usePilotState(): PilotState {
   return useSyncExternalStore(pilot.subscribe, pilot.getState, pilot.getState);
 }
 
-export function useSitepilot(): PilotState & Pick<Pilot, "send" | "stop" | "reset" | "setTools" | "clearHighlight" | "getHistory" | "loadHistory"> {
+export function useSitepilot(): PilotState &
+  Pick<Pilot, "send" | "stop" | "reset" | "setTools" | "clearHighlight" | "getHistory" | "loadHistory"> {
   const pilot = usePilot();
   const state = usePilotState();
   return {

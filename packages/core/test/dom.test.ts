@@ -101,8 +101,15 @@ describe("resolveKey", () => {
 describe("hints", () => {
   test("data-pilot-hint rides along, clipped, and mark() helpers emit it", async () => {
     const { mark, markItem, HINT_ATTR } = await import("../src/attrs");
-    expect(mark("Save button", { hint: "Safe to click." })).toEqual({ "data-pilot": "Save button", [HINT_ATTR]: "Safe to click." });
-    expect(markItem("Card", { hint: "h", read: true })).toEqual({ "data-pilot-item": "Card", [HINT_ATTR]: "h", "data-pilot-read": "" });
+    expect(mark("Save button", { hint: "Safe to click." })).toEqual({
+      "data-pilot": "Save button",
+      [HINT_ATTR]: "Safe to click.",
+    });
+    expect(markItem("Card", { hint: "h", read: true })).toEqual({
+      "data-pilot-item": "Card",
+      [HINT_ATTR]: "h",
+      "data-pilot-read": "",
+    });
     document.body.innerHTML = `<button data-pilot="Save button" data-pilot-hint="Saves the draft. Pro plan only."></button><b data-pilot="Plain"></b>`;
     const [save, plain] = scanAmbient();
     expect(save?.hint).toBe("Saves the draft. Pro plan only.");

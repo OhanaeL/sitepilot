@@ -44,7 +44,10 @@ export type JevAnswer =
 
 type Json = Record<string, unknown>;
 
-type Arg = { name: string; kind: "target" } | { name: string; kind: "enum"; values: string[]; description?: string } | { name: string; kind: "flag"; description?: string };
+type Arg =
+  | { name: string; kind: "target" }
+  | { name: string; kind: "enum"; values: string[]; description?: string }
+  | { name: string; kind: "flag"; description?: string };
 
 interface Candidate {
   name: string;
@@ -71,7 +74,8 @@ const LOOK_AT = 0.5;
 const MAX_ELEMENTS = 255;
 const EARLIER_MESSAGES = 6;
 
-const defaultReply = (calls: RoutedCall[]): string => (calls.at(-1)?.name === "highlight_element" ? "Here it is." : "Done.");
+const defaultReply = (calls: RoutedCall[]): string =>
+  calls.at(-1)?.name === "highlight_element" ? "Here it is." : "Done.";
 
 function argOf(name: string, schema: unknown): Arg | null {
   const s = (schema ?? {}) as Json;
@@ -90,7 +94,9 @@ function candidateOf(tool: Json, allowed: string[], hasElements: boolean): Candi
   if (!allowed.includes(name)) return null;
   const params = (fn["parameters"] ?? {}) as Json;
   const properties = (params["properties"] ?? {}) as Json;
-  const required = Array.isArray(params["required"]) ? (params["required"] as unknown[]).filter((r): r is string => typeof r === "string") : [];
+  const required = Array.isArray(params["required"])
+    ? (params["required"] as unknown[]).filter((r): r is string => typeof r === "string")
+    : [];
   const args = required.map((r) => argOf(r, properties[r]));
   if (args.some((a) => a === null || (a.kind === "target" && !hasElements))) return null;
   return { name, description: typeof fn["description"] === "string" ? fn["description"] : name, args: args as Arg[] };
@@ -101,16 +107,24 @@ const isTurnStart = (m: Json): boolean => m["role"] === "user" && typeof m["cont
 function readTurn(messages: Json[]): { request: string; earlier: Json[]; turn: Json[] } | null {
   const start = messages.map(isTurnStart).lastIndexOf(true);
   if (start < 0) return null;
-  return { request: messages[start]!["content"] as string, earlier: messages.slice(0, start), turn: messages.slice(start + 1) };
+  return {
+    request: messages[start]!["content"] as string,
+    earlier: messages.slice(0, start),
+    turn: messages.slice(start + 1),
+  };
 }
 
 const imagesIn = (m: Json): string[] =>
   Array.isArray(m["content"])
-    ? (m["content"] as Json[]).flatMap((p) => (p["type"] === "image_url" ? [String((p["image_url"] as Json)["url"])] : []))
+    ? (m["content"] as Json[]).flatMap((p) =>
+        p["type"] === "image_url" ? [String((p["image_url"] as Json)["url"])] : [],
+      )
     : [];
 
 function jevTurn(turn: Json[]): { actions: Action[]; frame: string | null } | null {
-  const results = new Map(turn.filter((m) => m["role"] === "tool").map((m) => [m["tool_call_id"] as string, String(m["content"] ?? "")]));
+  const results = new Map(
+    turn.filter((m) => m["role"] === "tool").map((m) => [m["tool_call_id"] as string, String(m["content"] ?? "")]),
+  );
   const actions: Action[] = [];
   let frame: string | null = null;
   for (const m of turn) {
@@ -127,7 +141,10 @@ function jevTurn(turn: Json[]): { actions: Action[]; frame: string | null } | nu
       } catch {
         args = {};
       }
-      actions.push({ call: { id: c["id"] as string, name: fn["name"] as string, args }, result: results.get(c["id"] as string) ?? "" });
+      actions.push({
+        call: { id: c["id"] as string, name: fn["name"] as string, args },
+        result: results.get(c["id"] as string) ?? "",
+      });
     }
   }
   return { actions, frame };
@@ -136,7 +153,9 @@ function jevTurn(turn: Json[]): { actions: Action[]; frame: string | null } | nu
 function frameKeys(result: string): string[] {
   try {
     const elements = (JSON.parse(result) as { elements?: unknown }).elements;
-    return Array.isArray(elements) ? elements.flatMap((e) => (typeof (e as Json)?.["key"] === "string" ? [(e as Json)["key"] as string] : [])) : [];
+    return Array.isArray(elements)
+      ? elements.flatMap((e) => (typeof (e as Json)?.["key"] === "string" ? [(e as Json)["key"] as string] : []))
+      : [];
   } catch {
     return [];
   }
@@ -158,11 +177,17 @@ const ON_SCREEN: Json = {
     "Is `user_request` asking only to show or press one thing on the screen, even one missing from `screen.elements` that the user picks out by its look, its position, or what it shows?",
   criteria: {
     true: "The user points at one thing on screen to be shown or pressed, such as 'press the blue button', 'open the card on the right', 'open the project Linus owns'.",
-    false: "The user asks a question that needs words in reply (how, why, what, how many), greets or thanks, wants text typed, or wants several steps done.",
+    false:
+      "The user asks a question that needs words in reply (how, why, what, how many), greets or thanks, wants text typed, or wants several steps done.",
   },
 };
 
-function questionsFor(candidates: Candidate[], elements: Record<string, string>, progress: boolean, picture: boolean): Record<string, Json> {
+function questionsFor(
+  candidates: Candidate[],
+  elements: Record<string, string>,
+  progress: boolean,
+  picture: boolean,
+): Record<string, Json> {
   const rest = progress ? "the part of `user_request` that `actions_taken` has not covered yet" : "`user_request`";
   const questions: Record<string, Json> = {
     self: {
@@ -170,7 +195,8 @@ function questionsFor(candidates: Candidate[], elements: Record<string, string>,
       instructions: `Is ${rest} only one of the \`actions\` done to one of the \`screen.elements\`, so that doing it ${progress ? "finishes the request" : "is the whole answer"} and nothing needs to be written back to the user?`,
       criteria: {
         true: "What remains is showing or pressing a listed element, such as 'where is X', 'show me X', 'open X', and that element is in `screen.elements`.",
-        false: "What remains needs words in reply (how, why, what, how many), is a greeting or thanks, needs text typed, needs something not in `screen.elements`, or needs several more steps.",
+        false:
+          "What remains needs words in reply (how, why, what, how many), is a greeting or thanks, needs text typed, needs something not in `screen.elements`, or needs several more steps.",
       },
     },
     tool: {
@@ -182,21 +208,34 @@ function questionsFor(candidates: Candidate[], elements: Record<string, string>,
   if (progress) {
     questions["done"] = {
       type: "noul",
-      instructions: "Has every part of `user_request` been carried out by `actions_taken`, with each result reporting success?",
+      instructions:
+        "Has every part of `user_request` been carried out by `actions_taken`, with each result reporting success?",
       criteria: {
         true: "Each `result` reports success, and the actions taken are everything the user asked for. Example: the user said 'open settings' and the Settings link was clicked.",
-        false: "A `result` reports a failure, or the user asked for something more than the actions taken, such as a further step or an explanation.",
+        false:
+          "A `result` reports a failure, or the user asked for something more than the actions taken, such as a further step or an explanation.",
       },
     };
   }
   if (candidates.some((c) => c.args.some((a) => a.kind === "target"))) {
-    const seen = picture ? " `screen.picture` shows the screen, each element drawn where it is and labelled with its key." : "";
-    questions["target"] = { type: "choice", instructions: `Which element in \`screen.elements\` is ${rest} about?${seen}`, criteria: elements };
+    const seen = picture
+      ? " `screen.picture` shows the screen, each element drawn where it is and labelled with its key."
+      : "";
+    questions["target"] = {
+      type: "choice",
+      instructions: `Which element in \`screen.elements\` is ${rest} about?${seen}`,
+      criteria: elements,
+    };
   }
   for (const c of candidates) {
     for (const a of c.args) {
       const about = `For the \`${c.name}\` action, ${a.kind === "enum" ? `which \`${a.name}\` does ${rest} ask for?` : `does ${rest} want \`${a.name}\` on?`}${"description" in a && a.description ? ` (${a.description})` : ""}`;
-      if (a.kind === "enum") questions[`${c.name}.${a.name}`] = { type: "choice", instructions: about, criteria: Object.fromEntries(a.values.map((v) => [v, null])) };
+      if (a.kind === "enum")
+        questions[`${c.name}.${a.name}`] = {
+          type: "choice",
+          instructions: about,
+          criteria: Object.fromEntries(a.values.map((v) => [v, null])),
+        };
       if (a.kind === "flag") questions[`${c.name}.${a.name}`] = { type: "noul", instructions: about };
     }
   }
@@ -206,7 +245,8 @@ function questionsFor(candidates: Candidate[], elements: Record<string, string>,
 const sure = (a: JevAnswer | undefined): number =>
   !a ? 0 : a.type === "noul" ? Math.max(a.noul, 1 - a.noul) : (a.probabilities[a.choice] ?? 0);
 
-const sameCall = (a: RoutedCall, b: RoutedCall): boolean => a.name === b.name && JSON.stringify(a.args) === JSON.stringify(b.args);
+const sameCall = (a: RoutedCall, b: RoutedCall): boolean =>
+  a.name === b.name && JSON.stringify(a.args) === JSON.stringify(b.args);
 
 type Reason = JevRouteEvent["reason"];
 type Asset = NonNullable<ReturnType<typeof assetOf>>;
@@ -222,11 +262,18 @@ interface Query {
   canLook: boolean;
 }
 
-type Outcome = { route: "self"; reason: Reason; content: string | null; toolCalls: RoutedCall[] } | { route: "llm"; reason: Reason };
+type Outcome =
+  | { route: "self"; reason: Reason; content: string | null; toolCalls: RoutedCall[] }
+  | { route: "llm"; reason: Reason };
 
 const newCallId = (): string => `${JEV_CALL_PREFIX}${crypto.randomUUID()}`;
 
-function queryFor({ messages, tools, context }: RouteInput, allowed: string[], maxSteps: number, look: boolean): Query | Reason {
+function queryFor(
+  { messages, tools, context }: RouteInput,
+  allowed: string[],
+  maxSteps: number,
+  look: boolean,
+): Query | Reason {
   const turn = readTurn(messages);
   const jev = turn && jevTurn(turn.turn);
   if (!turn || !jev) return "llm-turn";
@@ -243,17 +290,23 @@ function queryFor({ messages, tools, context }: RouteInput, allowed: string[], m
     ...ambient.filter((e) => !inFrame.includes(e.key)),
   ].slice(0, MAX_ELEMENTS);
 
-  const candidates = tools.map((t) => candidateOf(t, allowed, listed.length > 0)).filter((c): c is Candidate => c !== null);
+  const candidates = tools
+    .map((t) => candidateOf(t, allowed, listed.length > 0))
+    .filter((c): c is Candidate => c !== null);
   if (!candidates.length) return "no-tools";
   const canLook = look && looks.length === 0 && tools.some((t) => (t["function"] as Json)["name"] === LOOK_TOOL);
 
-  const elements = Object.fromEntries(listed.map((e) => [e.key, e.hint ? `${e.description} — ${e.hint}` : e.description]));
+  const elements = Object.fromEntries(
+    listed.map((e) => [e.key, e.hint ? `${e.description} — ${e.hint}` : e.description]),
+  );
   const progress = steps.length > 0;
   const ref = `${crypto.randomUUID()}-screen`;
   const state: Json = {
     user_request: turn.request,
     ...(turn.earlier.length && { earlier_conversation: turn.earlier.flatMap(transcriptLine).slice(-EARLIER_MESSAGES) }),
-    ...(progress && { actions_taken: steps.map(({ call, result }) => ({ action: call.name, arguments: call.args, result })) }),
+    ...(progress && {
+      actions_taken: steps.map(({ call, result }) => ({ action: call.name, arguments: call.args, result })),
+    }),
     screen: {
       route: context?.screen.path ?? "",
       ...(context?.screen.area && { area: context.screen.area.description }),
@@ -293,10 +346,18 @@ async function askJev(
   if (!res.ok) throw new Error(`TypeSafe returned ${res.status}: ${(await res.text()).slice(0, 200)}`);
   const body = (await res.json()) as { answers?: unknown; model?: unknown };
   if (!body.answers || typeof body.answers !== "object") throw new Error("TypeSafe returned no answers");
-  return { answers: body.answers as Record<string, JevAnswer>, model: typeof body.model === "string" ? body.model : "jev" };
+  return {
+    answers: body.answers as Record<string, JevAnswer>,
+    model: typeof body.model === "string" ? body.model : "jev",
+  };
 }
 
-function outcome(answers: Record<string, JevAnswer>, query: Query, threshold: number, reply: (calls: RoutedCall[]) => string): Outcome {
+function outcome(
+  answers: Record<string, JevAnswer>,
+  query: Query,
+  threshold: number,
+  reply: (calls: RoutedCall[]) => string,
+): Outcome {
   const noul = (id: string): number => (answers[id]?.type === "noul" ? answers[id].noul : 0);
   const choice = (id: string): string | undefined => (answers[id]?.type === "choice" ? answers[id].choice : undefined);
   const { candidates, elements, steps } = query;
@@ -329,7 +390,12 @@ function outcome(answers: Record<string, JevAnswer>, query: Query, threshold: nu
   const step = pick();
   if (typeof step !== "string") return { route: "self", reason: "act", content: null, toolCalls: [step] };
   if (query.canLook && noul("on_screen") >= LOOK_AT) {
-    return { route: "self", reason: "look", content: null, toolCalls: [{ id: newCallId(), name: LOOK_TOOL, args: { actions: [] } }] };
+    return {
+      route: "self",
+      reason: "look",
+      content: null,
+      toolCalls: [{ id: newCallId(), name: LOOK_TOOL, args: { actions: [] } }],
+    };
   }
   return { route: "llm", reason: step };
 }

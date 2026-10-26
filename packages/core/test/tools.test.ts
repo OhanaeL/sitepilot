@@ -49,7 +49,10 @@ describe("prompt", () => {
     expect(full).toMatch(/^BASE\n\nBRIEF\n\nCURRENT SCREEN/);
     expect(full).toContain("ABOUT THE USER:\n- name: Ada");
     expect(full).toMatch(/Plan: pro$/);
-    const noBriefs = buildSystemPrompt({ screen: ctx, user: null, extra: null, briefs: ["BRIEF"], enabledTools: [] }, { briefs: false });
+    const noBriefs = buildSystemPrompt(
+      { screen: ctx, user: null, extra: null, briefs: ["BRIEF"], enabledTools: [] },
+      { briefs: false },
+    );
     expect(noBriefs).not.toContain("BRIEF");
   });
 });
@@ -62,7 +65,11 @@ describe("parseCompletion", () => {
           message: {
             content: null,
             tool_calls: [
-              { id: "c1", type: "function", function: { name: "click_element", arguments: '{"target":"Save button"}' } },
+              {
+                id: "c1",
+                type: "function",
+                function: { name: "click_element", arguments: '{"target":"Save button"}' },
+              },
             ],
           },
         },
@@ -86,7 +93,12 @@ describe("hints in the prompt", () => {
   const screen = {
     path: "/",
     ambient: [
-      { key: "Create project button", description: "Create project button", tier: "ambient" as const, hint: "Opens the dialog." },
+      {
+        key: "Create project button",
+        description: "Create project button",
+        tier: "ambient" as const,
+        hint: "Opens the dialog.",
+      },
       { key: "Project card #2", description: "Project card #2", tier: "ambient" as const },
     ],
     events: [],
@@ -94,7 +106,10 @@ describe("hints in the prompt", () => {
   };
 
   test("element hints render after an em dash; label-keyed hints ignore ordinals and merge", () => {
-    const text = renderScreen(screen, 40, { "Project card": "A project the user owns.", "Create project button": "Pro plan only." });
+    const text = renderScreen(screen, 40, {
+      "Project card": "A project the user owns.",
+      "Create project button": "Pro plan only.",
+    });
     expect(text).toContain("- Create project button: Create project button — Opens the dialog. Pro plan only.");
     expect(text).toContain("- Project card #2: Project card #2 — A project the user owns.");
   });

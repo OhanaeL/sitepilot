@@ -43,9 +43,7 @@ function fieldValue(el: HTMLElement): string {
   if (el instanceof HTMLTextAreaElement) return clip(el.value, MAX_VALUE_LEN);
   if (el instanceof HTMLSelectElement) return clip(el.selectedOptions[0]?.text ?? el.value, MAX_VALUE_LEN);
   if (el.isContentEditable) return clip(el.textContent ?? "", MAX_VALUE_LEN);
-  const inner = el.querySelector<HTMLInputElement | HTMLTextAreaElement>(
-    "input:not([type=password]), textarea",
-  );
+  const inner = el.querySelector<HTMLInputElement | HTMLTextAreaElement>("input:not([type=password]), textarea");
   return inner ? clip(inner.value, MAX_VALUE_LEN) : "";
 }
 
@@ -171,7 +169,10 @@ export function scanContext(root?: ParentNode): AreaContext | null {
   for (const el of scope.querySelectorAll<HTMLElement>(`[${CONTEXT_ATTR.topic}]`)) {
     const topic = (el.getAttribute(CONTEXT_ATTR.topic) ?? "").trim();
     if (topic && markerReachable(el)) {
-      markers.push({ el, area: { topic, description: (el.getAttribute(CONTEXT_ATTR.description) ?? "").trim() || topic } });
+      markers.push({
+        el,
+        area: { topic, description: (el.getAttribute(CONTEXT_ATTR.description) ?? "").trim() || topic },
+      });
     }
   }
   for (const area of manifestAreas()) {

@@ -40,7 +40,12 @@ const rectOf = (r: DOMRect): Rect => ({ left: r.left, top: r.top, right: r.right
 const viewport = (): Rect => ({ left: 0, top: 0, right: innerWidth, bottom: innerHeight });
 
 function intersect(a: Rect, b: Rect): Rect | null {
-  const r = { left: Math.max(a.left, b.left), top: Math.max(a.top, b.top), right: Math.min(a.right, b.right), bottom: Math.min(a.bottom, b.bottom) };
+  const r = {
+    left: Math.max(a.left, b.left),
+    top: Math.max(a.top, b.top),
+    right: Math.min(a.right, b.right),
+    bottom: Math.min(a.bottom, b.bottom),
+  };
   return r.right > r.left && r.bottom > r.top ? r : null;
 }
 
@@ -87,15 +92,20 @@ function sightingIn(el: HTMLElement, clip: Rect): Sighting {
 }
 
 /** Every element the model is sent (same keys and cap as the prompt), and whether the user can see it. */
-export function locateSeen(opts: { scan?: ScanOptions | undefined; items?: boolean; embedded?: number | undefined } = {}): SeenElement[] {
+export function locateSeen(
+  opts: { scan?: ScanOptions | undefined; items?: boolean; embedded?: number | undefined } = {},
+): SeenElement[] {
   const tiers = scanTiers(opts.scan);
   const ambient = tiers.ambient.slice(0, opts.embedded);
   const list = opts.items === false ? ambient : [...ambient, ...tiers.item];
   return list.map(({ key, tier, el }) => {
     const box = rectOf(el.getBoundingClientRect());
     const { clip, transparent } = clipAndOpacity(el, box);
-    const sighting: Sighting =
-      !intersect(box, viewport()) ? "offscreen" : clip && !transparent ? sightingIn(el, clip) : "hidden";
+    const sighting: Sighting = !intersect(box, viewport())
+      ? "offscreen"
+      : clip && !transparent
+        ? sightingIn(el, clip)
+        : "hidden";
     return { key, tier, el, sighting, box };
   });
 }
@@ -104,7 +114,11 @@ const OUTLINE = ["outline-style", "outline-width", "outline-color", "outline-off
 type Saved = Array<[value: string, priority: string]>;
 
 function outline(el: HTMLElement, tier: Tier, saved: Map<HTMLElement, Saved>): void {
-  if (!saved.has(el)) saved.set(el, OUTLINE.map((p) => [el.style.getPropertyValue(p), el.style.getPropertyPriority(p)]));
+  if (!saved.has(el))
+    saved.set(
+      el,
+      OUTLINE.map((p) => [el.style.getPropertyValue(p), el.style.getPropertyPriority(p)]),
+    );
   const want = [tier === "ambient" ? "solid" : "dashed", "2px", ACCENT, "2px"];
   OUTLINE.forEach((p, i) => {
     if (el.style.getPropertyValue(p) !== want[i]) el.style.setProperty(p, want[i]!, "important");

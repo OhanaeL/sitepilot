@@ -3,7 +3,14 @@ import { ACTION_TOOLS, resolveBuiltinTools, type ActionToolName, type BuiltinToo
 import { scanAmbient, scanContext, type ScanOptions } from "./dom";
 import { showSeen } from "./seen";
 import { getEvents, installEventsBuffer } from "./events";
-import { buildSystemPrompt, DEFAULT_MAX_EMBEDDED, type Hints, type PromptContext, type PromptOptions, type ScreenContext } from "./prompt";
+import {
+  buildSystemPrompt,
+  DEFAULT_MAX_EMBEDDED,
+  type Hints,
+  type PromptContext,
+  type PromptOptions,
+  type ScreenContext,
+} from "./prompt";
 import { getManifest, loadManifest, setManifest, type PilotManifest } from "./manifest";
 import { mergeStrings, type PilotStrings, type PilotStringsOverride } from "./strings";
 import {
@@ -151,7 +158,10 @@ export function createPilot(options: PilotOptions): Pilot {
   const trim = options.history?.trim ?? defaultTrim;
   const getPath = options.getPath ?? (() => (typeof location !== "undefined" ? location.pathname : "/"));
   const plugins = options.plugins ?? [];
-  const fixedTools: readonly PilotTool[] = [...resolveBuiltinTools(options.builtinTools), ...plugins.flatMap((p) => p.tools ?? [])];
+  const fixedTools: readonly PilotTool[] = [
+    ...resolveBuiltinTools(options.builtinTools),
+    ...plugins.flatMap((p) => p.tools ?? []),
+  ];
   const tools = (): readonly PilotTool[] => [...fixedTools, ...(resolve(options.tools) ?? [])];
   const briefs = plugins.map((p) => p.brief).filter((b): b is string => !!b);
   const strings = mergeStrings(options.strings);
@@ -181,7 +191,11 @@ export function createPilot(options: PilotOptions): Pilot {
   let state: PilotState = {
     messages: [],
     status: "idle",
-    enabledTools: options.enabledTools ?? tools().filter((t) => t.kind === "action").map((t) => t.spec.function.name),
+    enabledTools:
+      options.enabledTools ??
+      tools()
+        .filter((t) => t.kind === "action")
+        .map((t) => t.spec.function.name),
     activeHighlight: null,
     error: null,
   };
@@ -244,22 +258,30 @@ export function createPilot(options: PilotOptions): Pilot {
   async function executeTool(call: ToolCall): Promise<{ content: string; attachments: ContentPart[] }> {
     const tool = tools().find((t) => t.spec.function.name === call.name);
     if (!tool) return { content: strings.unknownTool(call.name), attachments: [] };
-    if (tool.kind === "utility" && state.enabledTools.length === 0) return { content: strings.screenOff, attachments: [] };
+    if (tool.kind === "utility" && state.enabledTools.length === 0)
+      return { content: strings.screenOff, attachments: [] };
     if (tool.kind === "action" && !state.enabledTools.includes(call.name)) {
       return { content: strings.toolNotEnabled(call.name), attachments: [] };
     }
     try {
       const out = await tool.execute(call.args, toolContext);
-      return typeof out === "string" ? { content: out, attachments: [] } : { content: out.content, attachments: out.attachments ?? [] };
+      return typeof out === "string"
+        ? { content: out, attachments: [] }
+        : { content: out.content, attachments: out.attachments ?? [] };
     } catch (err) {
-      return { content: strings.toolThrew(call.name, err instanceof Error ? err.message : String(err)), attachments: [] };
+      return {
+        content: strings.toolThrew(call.name, err instanceof Error ? err.message : String(err)),
+        attachments: [],
+      };
     }
   }
 
   function requestFor(): CompletionRequest {
     const ctx = promptContext();
     const serverMode = options.prompt === "server";
-    const system: ChatMessage[] = serverMode ? [] : [{ role: "system", content: buildSystemPrompt(ctx, promptOptions()) }];
+    const system: ChatMessage[] = serverMode
+      ? []
+      : [{ role: "system", content: buildSystemPrompt(ctx, promptOptions()) }];
     const userId = typeof ctx.user?.["id"] === "string" ? ctx.user["id"] : undefined;
     return {
       messages: [...system, ...trim(history, maxHistory)],
@@ -283,7 +305,11 @@ export function createPilot(options: PilotOptions): Pilot {
       toolsBy = undefined;
     }
     if (attachments.length) {
-      record({ role: "user", content: [{ type: "text", text: strings.attachmentsNote }, ...attachments], ephemeral: true });
+      record({
+        role: "user",
+        content: [{ type: "text", text: strings.attachmentsNote }, ...attachments],
+        ephemeral: true,
+      });
     }
   }
 

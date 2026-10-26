@@ -4,7 +4,17 @@ import { locateSeen, showSeen } from "../src/seen";
 
 const at = (el: Element, left: number, top: number, width: number, height: number) => {
   el.getBoundingClientRect = () =>
-    ({ left, top, right: left + width, bottom: top + height, x: left, y: top, width, height, toJSON: () => ({}) }) as DOMRect;
+    ({
+      left,
+      top,
+      right: left + width,
+      bottom: top + height,
+      x: left,
+      y: top,
+      width,
+      height,
+      toJSON: () => ({}),
+    }) as DOMRect;
 };
 
 const byId = (id: string) => document.getElementById(id)!;

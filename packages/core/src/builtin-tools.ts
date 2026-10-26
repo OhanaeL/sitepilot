@@ -14,7 +14,8 @@ const settle = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, m
 
 const TARGET = {
   type: "string",
-  description: "Key of the on-screen element, exactly as listed under CURRENT SCREEN or returned by get_screen_elements.",
+  description:
+    "Key of the on-screen element, exactly as listed under CURRENT SCREEN or returned by get_screen_elements.",
 };
 
 const listOf = (found: ScreenElement[], empty: string, hints?: Hints): string =>

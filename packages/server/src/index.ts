@@ -146,7 +146,9 @@ function cleanMessage(raw: unknown): Json | null {
     const calls = m["tool_calls"].filter((c) => {
       const call = c as Json;
       const fn = call?.["function"] as Json | undefined;
-      return typeof call?.["id"] === "string" && typeof fn?.["name"] === "string" && typeof fn?.["arguments"] === "string";
+      return (
+        typeof call?.["id"] === "string" && typeof fn?.["name"] === "string" && typeof fn?.["arguments"] === "string"
+      );
     });
     if (calls.length) {
       out["tool_calls"] = calls.map((c) => {
@@ -203,7 +205,10 @@ function cleanContext(raw: unknown): PromptContext | null {
       path: screen["path"],
       ambient,
       events,
-      area: area && isStr(area["topic"]) ? { topic: area["topic"], description: isStr(area["description"]) ? area["description"] : area["topic"] } : null,
+      area:
+        area && isStr(area["topic"])
+          ? { topic: area["topic"], description: isStr(area["description"]) ? area["description"] : area["topic"] }
+          : null,
     },
     user: user && typeof user === "object" ? (user as Record<string, unknown>) : null,
     extra: isStr(c["extra"]) ? c["extra"] : null,
@@ -213,7 +218,11 @@ function cleanContext(raw: unknown): PromptContext | null {
 }
 
 function completionOf(decision: Extract<RouteDecision, { route: "self" }>): Json {
-  const toolCalls = decision.toolCalls.map((c) => ({ id: c.id, type: "function", function: { name: c.name, arguments: JSON.stringify(c.args) } }));
+  const toolCalls = decision.toolCalls.map((c) => ({
+    id: c.id,
+    type: "function",
+    function: { name: c.name, arguments: JSON.stringify(c.args) },
+  }));
   return {
     id: `chatcmpl-${crypto.randomUUID()}`,
     object: "chat.completion",

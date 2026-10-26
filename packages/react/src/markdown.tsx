@@ -61,7 +61,12 @@ export function renderMarkdown(text: string): ReactNode {
       continue;
     }
     const para: string[] = [];
-    while (i < lines.length && lines[i]!.trim() && !lines[i]!.startsWith("```") && !/^\s*(?:[-*•]|\d+[.)])\s+/.test(lines[i]!)) {
+    while (
+      i < lines.length &&
+      lines[i]!.trim() &&
+      !lines[i]!.startsWith("```") &&
+      !/^\s*(?:[-*•]|\d+[.)])\s+/.test(lines[i]!)
+    ) {
       para.push(lines[i++]!);
     }
     blocks.push(

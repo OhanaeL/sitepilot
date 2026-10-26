@@ -58,16 +58,12 @@ function push(type: EventType, el: Element): void {
   if (!info) return;
   const now = Date.now();
   const head = buffer[0];
-  const repeat =
-    head?.type === type && head.key === info.key && (type === "input" || now - head.at < DEDUPE_MS);
+  const repeat = head?.type === type && head.key === info.key && (type === "input" || now - head.at < DEDUPE_MS);
   if (repeat) {
     buffer = [{ ...head, at: now }, ...buffer.slice(1)];
   } else {
     const demoted = buffer.map((e) => (e.lastMove ? { ...e, lastMove: false } : e));
-    buffer = [{ type, key: info.key, tier: info.tier, at: now, lastMove: true }, ...demoted].slice(
-      0,
-      BUFFER_SIZE,
-    );
+    buffer = [{ type, key: info.key, tier: info.tier, at: now, lastMove: true }, ...demoted].slice(0, BUFFER_SIZE);
   }
   emit();
 }

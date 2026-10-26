@@ -39,7 +39,8 @@ export const DEFAULT_STRINGS: PilotStrings = {
   noItems: "(no item elements are on screen right now)",
   toolNotEnabled: (name) =>
     `The "${name}" tool is not enabled by the user. Use only the tools offered this turn, or tell the user what to do themselves.`,
-  screenOff: "The user has switched off every UI action, so the screen cannot be read. Answer from the conversation instead.",
+  screenOff:
+    "The user has switched off every UI action, so the screen cannot be read. Answer from the conversation instead.",
   unknownTool: (name) => `Unknown tool "${name}".`,
   toolThrew: (name, message) => `Tool "${name}" failed: ${message}`,
   attachmentsNote: "Attached: media produced by the tool calls above.",
@@ -57,7 +58,9 @@ export const DEFAULT_STRINGS: PilotStrings = {
   },
 };
 
-export type PilotStringsOverride = Partial<Omit<PilotStrings, "activity">> & { activity?: Partial<PilotStrings["activity"]> };
+export type PilotStringsOverride = Partial<Omit<PilotStrings, "activity">> & {
+  activity?: Partial<PilotStrings["activity"]>;
+};
 
 export function mergeStrings(override?: PilotStringsOverride): PilotStrings {
   if (!override) return DEFAULT_STRINGS;

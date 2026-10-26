@@ -41,11 +41,24 @@ describe("createPilotHandler", () => {
         messages: [
           { role: "system", content: "client" },
           { role: "user", content: "hello", secret: "x" },
-          { role: "assistant", content: null, tool_calls: [{ id: "c1", type: "function", function: { name: "f", arguments: "{}" } }] },
+          {
+            role: "assistant",
+            content: null,
+            tool_calls: [{ id: "c1", type: "function", function: { name: "f", arguments: "{}" } }],
+          },
           { role: "tool", tool_call_id: "c1", content: "ok" },
-          { role: "user", content: [{ type: "text", text: "t" }, { type: "image_url", image_url: { url: "data:image/png;base64,AA" } }] },
+          {
+            role: "user",
+            content: [
+              { type: "text", text: "t" },
+              { type: "image_url", image_url: { url: "data:image/png;base64,AA" } },
+            ],
+          },
         ],
-        tools: [{ type: "function", function: { name: "f", description: "d", parameters: { type: "object" } } }, { type: "bogus" }],
+        tools: [
+          { type: "function", function: { name: "f", description: "d", parameters: { type: "object" } } },
+          { type: "bogus" },
+        ],
       }),
     );
     expect(res.status).toBe(200);
@@ -77,7 +90,13 @@ describe("createPilotHandler", () => {
     expect((await handler(post({ messages: [] }))).status).toBe(400);
     expect((await handler(post({ messages: [{ role: "user", content: 1 }] }))).status).toBe(400);
     expect((await handler(post({ messages: [{ role: "tool", content: "x" }] }))).status).toBe(400);
-    expect((await handler(post({ messages: [{ role: "user", content: [{ type: "image_url", image_url: { url: "http://evil/x" } }] }] }))).status).toBe(400);
+    expect(
+      (
+        await handler(
+          post({ messages: [{ role: "user", content: [{ type: "image_url", image_url: { url: "http://evil/x" } }] }] }),
+        )
+      ).status,
+    ).toBe(400);
     expect((await handler(post({ messages: Array(3).fill({ role: "user", content: "a" }) }))).status).toBe(400);
     expect((await handler(post({ messages: [{ role: "user", content: "a".repeat(300) }] }))).status).toBe(413);
     expect(up.calls).toHaveLength(0);
@@ -99,7 +118,8 @@ describe("createPilotHandler", () => {
   });
 
   test("passes upstream errors through with their status", async () => {
-    const fetch = (async () => new Response(JSON.stringify({ error: { message: "quota" } }), { status: 429 })) as unknown as typeof fetch;
+    const fetch = (async () =>
+      new Response(JSON.stringify({ error: { message: "quota" } }), { status: 429 })) as unknown as typeof fetch;
     const handler = createPilotHandler({ apiKey: "k", model: "m", fetch });
     const res = await handler(post({ messages: [{ role: "user", content: "a" }] }));
     expect(res.status).toBe(429);
@@ -109,7 +129,12 @@ describe("createPilotHandler", () => {
 
 describe("server prompt mode", () => {
   const context = {
-    screen: { path: "/projects", ambient: [{ key: "Create project button", description: "Create project button", tier: "ambient" }], events: [], area: { topic: "projects", description: "The list" } },
+    screen: {
+      path: "/projects",
+      ambient: [{ key: "Create project button", description: "Create project button", tier: "ambient" }],
+      events: [],
+      area: { topic: "projects", description: "The list" },
+    },
     user: { id: "u1", name: "Ada" },
     extra: "Plan: pro",
     briefs: ["PLUGIN BRIEF"],
@@ -123,14 +148,22 @@ describe("server prompt mode", () => {
       model: "m",
       fetch: up.fetch,
       systemPrompt: "ALWAYS FIRST",
-      prompt: { system: "SECRET BASE", extra: (ctx, req) => `Session: ${req.headers.get("x-session")} / ${ctx.user?.["name"]}` },
+      prompt: {
+        system: "SECRET BASE",
+        extra: (ctx, req) => `Session: ${req.headers.get("x-session")} / ${ctx.user?.["name"]}`,
+      },
       toolDescriptions: { click_element: "SECRET CLICK DESC" },
     });
     const res = await handler(
       post(
         {
           messages: [{ role: "user", content: "hi" }],
-          tools: [{ type: "function", function: { name: "click_element", description: "client desc", parameters: { type: "object" } } }],
+          tools: [
+            {
+              type: "function",
+              function: { name: "click_element", description: "client desc", parameters: { type: "object" } },
+            },
+          ],
           user: "u1",
           sitepilot: context,
         },
@@ -150,7 +183,9 @@ describe("server prompt mode", () => {
     expect(messages[1]!.content).toContain("ABOUT THE USER:\n- id: u1\n- name: Ada");
     expect(messages[1]!.content).toContain("Plan: pro\n\nSession: s42 / Ada");
     expect(messages[2]).toEqual({ role: "user", content: "hi" });
-    expect((body["tools"] as Array<{ function: { description: string } }>)[0]!.function.description).toBe("SECRET CLICK DESC");
+    expect((body["tools"] as Array<{ function: { description: string } }>)[0]!.function.description).toBe(
+      "SECRET CLICK DESC",
+    );
   });
 
   test("with a server prompt configured, client system messages are dropped", async () => {
@@ -184,16 +219,36 @@ describe("server-side hints", () => {
   test("prompt.hints attach private guidance by label; DOM hints pass through", async () => {
     const up = upstream();
     const handler = createPilotHandler({
-      apiKey: "k", model: "m", fetch: up.fetch,
+      apiKey: "k",
+      model: "m",
+      fetch: up.fetch,
       prompt: { system: "S", hints: { "Create project button": "Pro plan only." } },
     });
-    await handler(post({
-      messages: [{ role: "user", content: "hi" }],
-      sitepilot: { screen: { path: "/", ambient: [
-        { key: "Create project button", description: "Create project button", tier: "ambient", hint: "Opens the dialog." },
-        { key: "Plain", description: "Plain", tier: "ambient" },
-      ], events: [], area: null }, user: null, extra: null, briefs: [], enabledTools: [] },
-    }));
+    await handler(
+      post({
+        messages: [{ role: "user", content: "hi" }],
+        sitepilot: {
+          screen: {
+            path: "/",
+            ambient: [
+              {
+                key: "Create project button",
+                description: "Create project button",
+                tier: "ambient",
+                hint: "Opens the dialog.",
+              },
+              { key: "Plain", description: "Plain", tier: "ambient" },
+            ],
+            events: [],
+            area: null,
+          },
+          user: null,
+          extra: null,
+          briefs: [],
+          enabledTools: [],
+        },
+      }),
+    );
     const sys = (up.calls[0]!.body["messages"] as Array<{ content: string }>)[0]!.content;
     expect(sys).toContain("- Create project button: Create project button — Opens the dialog. Pro plan only.");
     expect(sys).toMatch(/- Plain: Plain$/);
@@ -213,9 +268,16 @@ describe("CORS / allowOrigins", () => {
 
   test("cross-origin is rejected unless allow-listed; preflight answered; headers added", async () => {
     const up = upstream();
-    const handler = createPilotHandler({ apiKey: "k", model: "m", fetch: up.fetch, allowOrigins: ["https://ohanael.github.io"] });
+    const handler = createPilotHandler({
+      apiKey: "k",
+      model: "m",
+      fetch: up.fetch,
+      allowOrigins: ["https://ohanael.github.io"],
+    });
     expect((await handler(post(body, { origin: "https://evil.example" }))).status).toBe(403);
-    const pre = await handler(new Request("http://x/api/pilot", { method: "OPTIONS", headers: { origin: "https://ohanael.github.io" } }));
+    const pre = await handler(
+      new Request("http://x/api/pilot", { method: "OPTIONS", headers: { origin: "https://ohanael.github.io" } }),
+    );
     expect(pre.status).toBe(204);
     expect(pre.headers.get("access-control-allow-origin")).toBe("https://ohanael.github.io");
     expect(pre.headers.get("access-control-allow-methods")).toContain("POST");
@@ -228,7 +290,12 @@ describe("CORS / allowOrigins", () => {
 
   test("an opaque `Origin: null` (file:// pages, sandboxed iframes) is refused, not a crash", async () => {
     const up = upstream();
-    const handler = createPilotHandler({ apiKey: "k", model: "m", fetch: up.fetch, allowOrigins: ["https://ohanael.github.io"] });
+    const handler = createPilotHandler({
+      apiKey: "k",
+      model: "m",
+      fetch: up.fetch,
+      allowOrigins: ["https://ohanael.github.io"],
+    });
     expect((await handler(post(body, { origin: "null" }))).status).toBe(403);
     expect(up.calls).toHaveLength(0);
   });
@@ -254,9 +321,21 @@ describe("toNodeListener", () => {
       method: "POST",
       url: "/api/pilot",
       headers: { host: "localhost:5179", origin: "http://localhost:5179", "content-type": "application/json" },
-      on: (ev: string, cb: (c?: unknown) => void) => { handlers[ev] = cb; },
+      on: (ev: string, cb: (c?: unknown) => void) => {
+        handlers[ev] = cb;
+      },
     };
-    const res = { statusCode: 0, headers: {} as Record<string, string>, body: "", setHeader(k: string, v: string) { this.headers[k] = v; }, end(b?: string) { this.body = b ?? ""; } };
+    const res = {
+      statusCode: 0,
+      headers: {} as Record<string, string>,
+      body: "",
+      setHeader(k: string, v: string) {
+        this.headers[k] = v;
+      },
+      end(b?: string) {
+        this.body = b ?? "";
+      },
+    };
     const done = listener(req, res);
     handlers["data"]!(new TextEncoder().encode("{}"));
     handlers["end"]!();

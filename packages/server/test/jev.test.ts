@@ -31,16 +31,42 @@ const choice = (pick: string, p: number, other = "other"): JevAnswer => ({
 
 const target = { type: "string", description: "Key of the on-screen element." };
 const tools = [
-  { type: "function", function: { name: "highlight_element", description: "Spotlight one element.", parameters: { type: "object", properties: { target, message: { type: "string" } }, required: ["target"] } } },
-  { type: "function", function: { name: "click_element", description: "Click one element.", parameters: { type: "object", properties: { target }, required: ["target"] } } },
-  { type: "function", function: { name: "fill_field", description: "Type text.", parameters: { type: "object", properties: { target, text: { type: "string" } }, required: ["target", "text"] } } },
+  {
+    type: "function",
+    function: {
+      name: "highlight_element",
+      description: "Spotlight one element.",
+      parameters: { type: "object", properties: { target, message: { type: "string" } }, required: ["target"] },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "click_element",
+      description: "Click one element.",
+      parameters: { type: "object", properties: { target }, required: ["target"] },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "fill_field",
+      description: "Type text.",
+      parameters: { type: "object", properties: { target, text: { type: "string" } }, required: ["target", "text"] },
+    },
+  },
 ];
 const sitepilot = {
   screen: {
     path: "/",
     ambient: [
       { key: "Settings nav link", description: "Settings nav link", tier: "ambient" },
-      { key: "Create project button", description: "Create project button", tier: "ambient", hint: "Opens the dialog." },
+      {
+        key: "Create project button",
+        description: "Create project button",
+        tier: "ambient",
+        hint: "Opens the dialog.",
+      },
     ],
     events: [],
     area: null,
@@ -72,12 +98,22 @@ function handlerFor(s: ReturnType<typeof stack>, events: JevRouteEvent[] = [], o
 
 describe("jevRouter", () => {
   test("runs a plain on-screen action itself and never calls the LLM", async () => {
-    const s = stack({ self: noul(0.92), tool: choice("highlight_element", 1), target: choice("Settings nav link", 0.98) });
+    const s = stack({
+      self: noul(0.92),
+      tool: choice("highlight_element", 1),
+      target: choice("Settings nav link", 0.98),
+    });
     const events: JevRouteEvent[] = [];
     const res = await handlerFor(s, events)(post([{ role: "user", content: "where are the settings?" }]));
 
     expect(res.status).toBe(200);
-    const json = (await res.json()) as { model: string; choices: Array<{ finish_reason: string; message: { tool_calls: Array<{ id: string; function: { name: string; arguments: string } }> } }> };
+    const json = (await res.json()) as {
+      model: string;
+      choices: Array<{
+        finish_reason: string;
+        message: { tool_calls: Array<{ id: string; function: { name: string; arguments: string } }> };
+      }>;
+    };
     const call = json.choices[0]!.message.tool_calls[0]!;
     expect(json.model).toBe("jev-1.14.0");
     expect(json.choices[0]!.finish_reason).toBe("tool_calls");
@@ -99,7 +135,11 @@ describe("jevRouter", () => {
   });
 
   test("hands anything that needs words to the LLM", async () => {
-    const s = stack({ self: noul(0.12), tool: choice("click_element", 0.7), target: choice("Create project button", 1) });
+    const s = stack({
+      self: noul(0.12),
+      tool: choice("click_element", 0.7),
+      target: choice("Create project button", 1),
+    });
     const events: JevRouteEvent[] = [];
     const res = await handlerFor(s, events)(post([{ role: "user", content: "how do I make a project?" }]));
     expect(await res.json()).toEqual({ choices: [{ message: { content: "from the llm" } }] });
@@ -108,7 +148,11 @@ describe("jevRouter", () => {
   });
 
   test("an unsure target goes to the LLM", async () => {
-    const s = stack({ self: noul(0.9), tool: choice("highlight_element", 0.95), target: choice("Settings nav link", 0.55) });
+    const s = stack({
+      self: noul(0.9),
+      tool: choice("highlight_element", 0.95),
+      target: choice("Settings nav link", 0.55),
+    });
     await handlerFor(s)(post([{ role: "user", content: "show me the Apollo project" }]));
     expect(s.llm).toHaveLength(1);
   });
@@ -126,7 +170,12 @@ describe("jevRouter", () => {
   });
 
   test("closes the turn with a reply once its steps succeeded", async () => {
-    const s = stack({ done: noul(0.9), self: noul(0.5), tool: choice("highlight_element", 0.9), target: choice("Settings nav link", 1) });
+    const s = stack({
+      done: noul(0.9),
+      self: noul(0.5),
+      tool: choice("highlight_element", 0.9),
+      target: choice("Settings nav link", 1),
+    });
     const res = await handlerFor(s)(
       post([
         { role: "user", content: "where are the settings?" },
@@ -140,14 +189,28 @@ describe("jevRouter", () => {
     expect(s.llm).toHaveLength(0);
 
     const state = s.jev[0]!["state"] as Body;
-    expect(state["actions_taken"]).toEqual([{ action: "highlight_element", arguments: { target: "Settings nav link" }, result: 'Done: highlighted "Settings nav link".' }]);
+    expect(state["actions_taken"]).toEqual([
+      {
+        action: "highlight_element",
+        arguments: { target: "Settings nav link" },
+        result: 'Done: highlighted "Settings nav link".',
+      },
+    ]);
     expect(Object.keys(s.jev[0]!["questions"] as Body)).toContain("done");
   });
 
   test("never repeats a step it already took", async () => {
-    const s = stack({ done: noul(0.02), self: noul(0.9), tool: choice("highlight_element", 1), target: choice("Settings nav link", 1) });
+    const s = stack({
+      done: noul(0.02),
+      self: noul(0.9),
+      tool: choice("highlight_element", 1),
+      target: choice("Settings nav link", 1),
+    });
     const events: JevRouteEvent[] = [];
-    await handlerFor(s, events)(
+    await handlerFor(
+      s,
+      events,
+    )(
       post([
         { role: "user", content: "where are the settings?" },
         jevCall("jev_1", "highlight_element", { target: "Settings nav link" }),
@@ -188,7 +251,12 @@ describe("jevRouter", () => {
   });
 
   test("stops after maxSteps Jev steps", async () => {
-    const s = stack({ done: noul(0.1), self: noul(0.95), tool: choice("click_element", 1), target: choice("Create project button", 1) });
+    const s = stack({
+      done: noul(0.1),
+      self: noul(0.95),
+      tool: choice("click_element", 1),
+      target: choice("Create project button", 1),
+    });
     const events: JevRouteEvent[] = [];
     await handlerFor(s, events, { maxSteps: 1 })(
       post([
@@ -239,42 +307,111 @@ describe("jevRouter", () => {
         },
       },
     };
-    const s = stack({ self: noul(0.9), tool: choice("set_theme", 0.99), "set_theme.theme": choice("dark", 0.97, "light"), "set_theme.animate": noul(0.1) });
-    const handler = createPilotHandler({ apiKey: "sk", model: "m", fetch: s.fetch, router: jevRouter({ apiKey: "ts", fetch: s.fetch, tools: ["set_theme"] }) });
+    const s = stack({
+      self: noul(0.9),
+      tool: choice("set_theme", 0.99),
+      "set_theme.theme": choice("dark", 0.97, "light"),
+      "set_theme.animate": noul(0.1),
+    });
+    const handler = createPilotHandler({
+      apiKey: "sk",
+      model: "m",
+      fetch: s.fetch,
+      router: jevRouter({ apiKey: "ts", fetch: s.fetch, tools: ["set_theme"] }),
+    });
     const res = await handler(
-      new Request("http://x", { method: "POST", body: JSON.stringify({ messages: [{ role: "user", content: "dark mode please" }], tools: [custom] }) }),
+      new Request("http://x", {
+        method: "POST",
+        body: JSON.stringify({ messages: [{ role: "user", content: "dark mode please" }], tools: [custom] }),
+      }),
     );
-    const json = (await res.json()) as { choices: Array<{ message: { tool_calls: Array<{ function: { arguments: string } }> } }> };
-    expect(JSON.parse(json.choices[0]!.message.tool_calls[0]!.function.arguments)).toEqual({ theme: "dark", animate: false });
-    expect(Object.keys(s.jev[0]!["questions"] as Body).sort()).toEqual(["self", "set_theme.animate", "set_theme.theme", "tool"]);
+    const json = (await res.json()) as {
+      choices: Array<{ message: { tool_calls: Array<{ function: { arguments: string } }> } }>;
+    };
+    expect(JSON.parse(json.choices[0]!.message.tool_calls[0]!.function.arguments)).toEqual({
+      theme: "dark",
+      animate: false,
+    });
+    expect(Object.keys(s.jev[0]!["questions"] as Body).sort()).toEqual([
+      "self",
+      "set_theme.animate",
+      "set_theme.theme",
+      "tool",
+    ]);
 
-    const off = stack({ self: noul(0.9), tool: choice("set_theme", 0.99), "set_theme.theme": choice("purple", 0.97, "light"), "set_theme.animate": noul(0.1) });
-    const offHandler = createPilotHandler({ apiKey: "sk", model: "m", fetch: off.fetch, router: jevRouter({ apiKey: "ts", fetch: off.fetch, tools: ["set_theme"] }) });
-    await offHandler(new Request("http://x", { method: "POST", body: JSON.stringify({ messages: [{ role: "user", content: "purple mode please" }], tools: [custom] }) }));
+    const off = stack({
+      self: noul(0.9),
+      tool: choice("set_theme", 0.99),
+      "set_theme.theme": choice("purple", 0.97, "light"),
+      "set_theme.animate": noul(0.1),
+    });
+    const offHandler = createPilotHandler({
+      apiKey: "sk",
+      model: "m",
+      fetch: off.fetch,
+      router: jevRouter({ apiKey: "ts", fetch: off.fetch, tools: ["set_theme"] }),
+    });
+    await offHandler(
+      new Request("http://x", {
+        method: "POST",
+        body: JSON.stringify({ messages: [{ role: "user", content: "purple mode please" }], tools: [custom] }),
+      }),
+    );
     expect(off.llm).toHaveLength(1);
   });
 
   describe("looking at the screen", () => {
-    const computer = { type: "function", function: { name: "computer", description: "Act, then capture a frame.", parameters: { type: "object", properties: { actions: { type: "array" } }, required: ["actions"] } } };
+    const computer = {
+      type: "function",
+      function: {
+        name: "computer",
+        description: "Act, then capture a frame.",
+        parameters: { type: "object", properties: { actions: { type: "array" } }, required: ["actions"] },
+      },
+    };
     const frame = "data:image/png;base64,iVBORw0KGgo=";
     const withComputer = (messages: Body[]) =>
-      new Request("http://x/api/pilot", { method: "POST", body: JSON.stringify({ messages, tools: [...tools, computer], sitepilot }) });
+      new Request("http://x/api/pilot", {
+        method: "POST",
+        body: JSON.stringify({ messages, tools: [...tools, computer], sitepilot }),
+      });
     const looked = [
       { role: "user", content: "open the project Linus owns" },
       jevCall("jev_look", "computer", { actions: [] }),
       {
         role: "tool",
         tool_call_id: "jev_look",
-        content: JSON.stringify({ executed: 0, elements: [{ key: "Settings nav link", x: 1, y: 1, w: 9, h: 9 }, { key: "Project card: Cassini", x: 400, y: 90, w: 120, h: 110 }] }),
+        content: JSON.stringify({
+          executed: 0,
+          elements: [
+            { key: "Settings nav link", x: 1, y: 1, w: 9, h: 9 },
+            { key: "Project card: Cassini", x: 400, y: 90, w: 120, h: 110 },
+          ],
+        }),
       },
-      { role: "user", content: [{ type: "text", text: "Attached: media." }, { type: "image_url", image_url: { url: frame } }] },
+      {
+        role: "user",
+        content: [
+          { type: "text", text: "Attached: media." },
+          { type: "image_url", image_url: { url: frame } },
+        ],
+      },
     ];
 
     test("takes a frame when the text list can't pin the target", async () => {
-      const s = stack({ self: noul(0.3), tool: choice("click_element", 0.9), target: choice("Settings nav link", 0.4), on_screen: noul(0.82) });
+      const s = stack({
+        self: noul(0.3),
+        tool: choice("click_element", 0.9),
+        target: choice("Settings nav link", 0.4),
+        on_screen: noul(0.82),
+      });
       const events: JevRouteEvent[] = [];
       const res = await handlerFor(s, events)(withComputer([{ role: "user", content: "open the project Linus owns" }]));
-      const json = (await res.json()) as { choices: Array<{ message: { tool_calls: Array<{ id: string; function: { name: string; arguments: string } }> } }> };
+      const json = (await res.json()) as {
+        choices: Array<{
+          message: { tool_calls: Array<{ id: string; function: { name: string; arguments: string } }> };
+        }>;
+      };
       const call = json.choices[0]!.message.tool_calls[0]!;
       expect(call.id.startsWith("jev_")).toBe(true);
       expect(call.function.name).toBe("computer");
@@ -285,22 +422,40 @@ describe("jevRouter", () => {
     });
 
     test("picks from the picture, items in the frame included", async () => {
-      const s = stack({ self: noul(0.9), tool: choice("click_element", 0.95), target: choice("Project card: Cassini", 0.97) });
+      const s = stack({
+        self: noul(0.9),
+        tool: choice("click_element", 0.95),
+        target: choice("Project card: Cassini", 0.97),
+      });
       const res = await handlerFor(s)(withComputer(looked));
-      const json = (await res.json()) as { choices: Array<{ message: { tool_calls: Array<{ function: { name: string; arguments: string } }> } }> };
-      expect(JSON.parse(json.choices[0]!.message.tool_calls[0]!.function.arguments)).toEqual({ target: "Project card: Cassini" });
+      const json = (await res.json()) as {
+        choices: Array<{ message: { tool_calls: Array<{ function: { name: string; arguments: string } }> } }>;
+      };
+      expect(JSON.parse(json.choices[0]!.message.tool_calls[0]!.function.arguments)).toEqual({
+        target: "Project card: Cassini",
+      });
 
       const asked = s.jev[0]!;
       const screen = (asked["state"] as Body)["screen"] as { picture: string; elements: Array<{ key: string }> };
-      expect(asked["assets"]).toEqual({ [screen.picture]: { type: "image", format: "png", data_base64: "iVBORw0KGgo=" } });
+      expect(asked["assets"]).toEqual({
+        [screen.picture]: { type: "image", format: "png", data_base64: "iVBORw0KGgo=" },
+      });
       expect(s.jevHeaders[0]!.get("typesafe-danger-zone-images")).toBe("true");
-      expect(screen.elements.map((e) => e.key)).toEqual(["Settings nav link", "Project card: Cassini", "Create project button"]);
+      expect(screen.elements.map((e) => e.key)).toEqual([
+        "Settings nav link",
+        "Project card: Cassini",
+        "Create project button",
+      ]);
       expect((asked["state"] as Body)["actions_taken"]).toBeUndefined();
       expect(Object.keys(asked["questions"] as Body)).not.toContain("on_screen");
     });
 
     test("looks once per turn, then hands off", async () => {
-      const s = stack({ self: noul(0.4), tool: choice("click_element", 0.9), target: choice("Project card: Cassini", 0.5) });
+      const s = stack({
+        self: noul(0.4),
+        tool: choice("click_element", 0.9),
+        target: choice("Project card: Cassini", 0.5),
+      });
       const events: JevRouteEvent[] = [];
       await handlerFor(s, events)(withComputer(looked));
       expect(events[0]!.reason).toBe("needs-llm");
@@ -308,7 +463,12 @@ describe("jevRouter", () => {
     });
 
     test("the picture is only used in the round right after the look", async () => {
-      const s = stack({ done: noul(0.9), self: noul(0.1), tool: choice("click_element", 1), target: choice("Settings nav link", 1) });
+      const s = stack({
+        done: noul(0.9),
+        self: noul(0.1),
+        tool: choice("click_element", 1),
+        target: choice("Settings nav link", 1),
+      });
       const res = await handlerFor(s)(
         withComputer([
           ...looked,
@@ -317,13 +477,28 @@ describe("jevRouter", () => {
         ]),
       );
       expect(s.jev[0]!["assets"]).toBeUndefined();
-      expect((s.jev[0]!["state"] as Body)["actions_taken"]).toEqual([{ action: "click_element", arguments: { target: "Project card: Cassini" }, result: 'Done: clicked "Project card: Cassini".' }]);
-      expect(((await res.json()) as { choices: Array<{ message: Body }> }).choices[0]!.message["content"]).toBe("Done.");
+      expect((s.jev[0]!["state"] as Body)["actions_taken"]).toEqual([
+        {
+          action: "click_element",
+          arguments: { target: "Project card: Cassini" },
+          result: 'Done: clicked "Project card: Cassini".',
+        },
+      ]);
+      expect(((await res.json()) as { choices: Array<{ message: Body }> }).choices[0]!.message["content"]).toBe(
+        "Done.",
+      );
     });
 
     test("look: false keeps pictures away from TypeSafe", async () => {
-      const s = stack({ self: noul(0.3), tool: choice("click_element", 0.9), target: choice("Settings nav link", 0.4), on_screen: noul(0.9) });
-      await handlerFor(s, [], { look: false })(withComputer([{ role: "user", content: "open the project Linus owns" }]));
+      const s = stack({
+        self: noul(0.3),
+        tool: choice("click_element", 0.9),
+        target: choice("Settings nav link", 0.4),
+        on_screen: noul(0.9),
+      });
+      await handlerFor(s, [], { look: false })(
+        withComputer([{ role: "user", content: "open the project Linus owns" }]),
+      );
       expect(Object.keys(s.jev[0]!["questions"] as Body)).not.toContain("on_screen");
       expect(s.llm).toHaveLength(1);
     });
