@@ -1,3 +1,4 @@
+/// <reference path="./css.d.ts" />
 import driverCss from "driver.js/dist/driver.css";
 
 const STYLE_ID = "sitepilot-driver-css";

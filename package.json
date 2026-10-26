@@ -5,7 +5,7 @@
   "scripts": {
     "build": "bun run --filter './packages/*' build",
     "typecheck": "bun run --filter './packages/*' typecheck",
-    "test": "bun test",
+    "test": "bun test --conditions=@sitepilot/source",
     "dev:example": "bun run --filter sitepilot-example-vite-react dev"
   },
   "devDependencies": {
