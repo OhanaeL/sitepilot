@@ -20,5 +20,8 @@ describe("renderMarkdown", () => {
   test("soft line breaks inside a paragraph; unsafe link schemes stay text", () => {
     expect(html("a\nb")).toBe("<p>a<br/>b</p>");
     expect(html("[x](javascript:alert(1))")).toBe("<p>[x](javascript:alert(1))</p>");
+    expect(html("[x](//evil.example/a)")).toBe("<p>[x](//evil.example/a)</p>");
+    expect(html("[x](javascript:void0)")).toBe("<p>[x](javascript:void0)</p>");
+    expect(html("[x](/work/a)")).toContain('href="/work/a"');
   });
 });
