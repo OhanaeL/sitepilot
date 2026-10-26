@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { renderMarkdown } from "../src/markdown";
 
-const html = (s: string) => renderToStaticMarkup(<>{renderMarkdown(s)}</>);
+const html = (s: string) => renderToStaticMarkup(renderMarkdown(s));
 
 describe("renderMarkdown", () => {
   test("paragraphs, bold, italic, code, links", () => {
@@ -20,5 +20,10 @@ describe("renderMarkdown", () => {
   test("soft line breaks inside a paragraph; unsafe link schemes stay text", () => {
     expect(html("a\nb")).toBe("<p>a<br/>b</p>");
     expect(html("[x](javascript:alert(1))")).toBe("<p>[x](javascript:alert(1))</p>");
+    expect(html("[x](//evil.example/a)")).toBe("<p>[x](//evil.example/a)</p>");
+    expect(html("[x](javascript:void0)")).toBe("<p>[x](javascript:void0)</p>");
+    expect(html("[x](/\\evil.example)")).toBe("<p>[x](/\\evil.example)</p>");
+    expect(html("[x](https://a.b\\@evil.example)")).toBe("<p>[x](https://a.b\\@evil.example)</p>");
+    expect(html("[x](/work/a)")).toContain('href="/work/a"');
   });
 });

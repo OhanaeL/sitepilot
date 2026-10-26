@@ -46,7 +46,7 @@ export interface PilotHandlerOptions {
    * Server-side prompt composition. When the browser runs `prompt: "server"` it
    * sends a `sitepilot` context instead of a system message; this renders it
    * here so your wording never ships to the client. `system` replaces the
-   * default base instructions.
+   * default base instructions. While set, system messages from the client are dropped.
    */
   prompt?: ServerPromptOptions;
   /** Rewrite advertised tool descriptions by name, e.g. `{ click_element: "…" }`. */
@@ -97,16 +97,19 @@ function withHeaders(res: Response, headers: Record<string, string>): Response {
 }
 
 /** null = same-origin (no CORS needed); a string = allowed cross-origin; false = rejected. */
+function hostOf(url: string): string | null {
+  try {
+    return new URL(url).host;
+  } catch {
+    return null;
+  }
+}
+
 function checkOrigin(req: Request, allow: string[] | undefined): string | null | false {
   const origin = req.headers.get("origin");
   if (!origin) return null;
-  let host = "";
-  try {
-    host = new URL(req.url).host;
-  } catch {
-    host = "";
-  }
-  if (new URL(origin).host === host) return null;
+  const host = hostOf(origin);
+  if (host !== null && host === hostOf(req.url)) return null;
   if (!allow) return false;
   if (allow.includes("*")) return "*";
   return allow.includes(origin) ? origin : false;
@@ -143,7 +146,9 @@ function cleanMessage(raw: unknown): Json | null {
     const calls = m["tool_calls"].filter((c) => {
       const call = c as Json;
       const fn = call?.["function"] as Json | undefined;
-      return typeof call?.["id"] === "string" && typeof fn?.["name"] === "string" && typeof fn?.["arguments"] === "string";
+      return (
+        typeof call?.["id"] === "string" && typeof fn?.["name"] === "string" && typeof fn?.["arguments"] === "string"
+      );
     });
     if (calls.length) {
       out["tool_calls"] = calls.map((c) => {
@@ -200,7 +205,10 @@ function cleanContext(raw: unknown): PromptContext | null {
       path: screen["path"],
       ambient,
       events,
-      area: area && isStr(area["topic"]) ? { topic: area["topic"], description: isStr(area["description"]) ? area["description"] : area["topic"] } : null,
+      area:
+        area && isStr(area["topic"])
+          ? { topic: area["topic"], description: isStr(area["description"]) ? area["description"] : area["topic"] }
+          : null,
     },
     user: user && typeof user === "object" ? (user as Record<string, unknown>) : null,
     extra: isStr(c["extra"]) ? c["extra"] : null,
@@ -210,7 +218,11 @@ function cleanContext(raw: unknown): PromptContext | null {
 }
 
 function completionOf(decision: Extract<RouteDecision, { route: "self" }>): Json {
-  const toolCalls = decision.toolCalls.map((c) => ({ id: c.id, type: "function", function: { name: c.name, arguments: JSON.stringify(c.args) } }));
+  const toolCalls = decision.toolCalls.map((c) => ({
+    id: c.id,
+    type: "function",
+    function: { name: c.name, arguments: JSON.stringify(c.args) },
+  }));
   return {
     id: `chatcmpl-${crypto.randomUUID()}`,
     object: "chat.completion",
@@ -253,8 +265,9 @@ export function createPilotHandler(options: PilotHandlerOptions): (req: Request)
     if (!Array.isArray(body["messages"]) || body["messages"].length === 0) return error(400, "messages required");
     if (body["messages"].length > maxMessages) return error(400, `at most ${maxMessages} messages`);
 
-    const messages = body["messages"].map(cleanMessage);
-    if (messages.some((m) => m === null)) return error(400, "malformed message");
+    const cleaned = body["messages"].map(cleanMessage);
+    if (cleaned.some((m) => m === null)) return error(400, "malformed message");
+    const messages = options.prompt ? cleaned.filter((m) => m!["role"] !== "system") : cleaned;
     const tools = Array.isArray(body["tools"])
       ? body["tools"].map((t) => cleanTool(t, options.toolDescriptions ?? {})).filter(Boolean)
       : [];
@@ -267,23 +280,28 @@ export function createPilotHandler(options: PilotHandlerOptions): (req: Request)
     };
 
     if (options.router) {
-      const decision = await options.router({
-        messages: messages as Json[],
-        tools: tools as Json[],
-        context: ctx && {
-          ...ctx,
-          screen: {
-            ...ctx.screen,
-            ambient: ctx.screen.ambient.map((e) => {
-              const { hint: _, ...rest } = e;
-              const hint = hintFor(e, promptOptions.hints);
-              return { ...rest, ...(hint && { hint }) };
-            }),
+      let decision: RouteDecision | null = null;
+      try {
+        decision = await options.router({
+          messages: messages as Json[],
+          tools: tools as Json[],
+          context: ctx && {
+            ...ctx,
+            screen: {
+              ...ctx.screen,
+              ambient: ctx.screen.ambient.map((e) => {
+                const { hint: _, ...rest } = e;
+                const hint = hintFor(e, promptOptions.hints);
+                return { ...rest, ...(hint && { hint }) };
+              }),
+            },
           },
-        },
-        signal: req.signal,
-      });
-      if (decision.route === "self") return json(200, completionOf(decision));
+          signal: req.signal,
+        });
+      } catch {
+        decision = null;
+      }
+      if (decision?.route === "self") return json(200, completionOf(decision));
     }
 
     const system: Json[] = [];
@@ -356,7 +374,9 @@ export function toNodeListener(handler: (req: Request) => Promise<Response>) {
       new Request(`http://${host}${req.url ?? "/"}`, { method: req.method ?? "POST", headers, ...(body && { body }) }),
     );
     res.statusCode = response.status;
-    response.headers.forEach((value, key) => res.setHeader(key, value));
+    response.headers.forEach((value, key) => {
+      res.setHeader(key, value);
+    });
     res.end(await response.text());
   };
 }

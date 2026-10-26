@@ -352,9 +352,10 @@ Everything sitepilot does runs in the browser; the only thing a static site can'
 
 ```bash
 bun install
-bun run build       # all packages (core first — the others resolve it through the workspace link)
-bun test            # happy-dom; layout is stubbed in test/setup.ts
+bun run build
+bun run test        # happy-dom; layout is stubbed in test/setup.ts
 bun run typecheck
+bun run lint        # Biome, as CI runs it; `bun run format` fixes
 ```
 
 MIT © Ohanael

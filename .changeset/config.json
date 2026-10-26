@@ -1,0 +1,11 @@
+{
+  "$schema": "https://unpkg.com/@changesets/config@4.0.1/schema.json",
+  "baseBranch": "main",
+  "access": "public",
+  "changelog": "@changesets/cli/changelog",
+  "commit": false,
+  "ignore": ["sitepilot-example-vite-react", "sitepilot-example-cloudflare-worker"],
+  "fixed": [["@sitepilot/core", "@sitepilot/react", "@sitepilot/server", "@sitepilot/computer"]],
+  "linked": [],
+  "updateInternalDependencies": "patch"
+}

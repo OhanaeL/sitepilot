@@ -77,7 +77,8 @@ function parseAction(raw: unknown, index: number): Action {
       return out;
     }
     case "wait":
-      if (!isInt(a["ms"], 0, MAX_WAIT_MS)) throw new Error(`action ${index}: wait needs integer ms in 0-${MAX_WAIT_MS}`);
+      if (!isInt(a["ms"], 0, MAX_WAIT_MS))
+        throw new Error(`action ${index}: wait needs integer ms in 0-${MAX_WAIT_MS}`);
       return { do: "wait", ms: a["ms"] };
     default:
       throw new Error(`action ${index}: unknown do "${String(a["do"])}"`);

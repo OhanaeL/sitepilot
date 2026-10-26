@@ -92,7 +92,10 @@ export function defineTool<A extends Record<string, unknown> = Record<string, un
 }
 
 /** Patch a tool's advertised description/parameters without touching its behaviour. */
-export function patchTool(tool: PilotTool, patch: Partial<ToolSpec["function"]> & { kind?: PilotTool["kind"] }): PilotTool {
+export function patchTool(
+  tool: PilotTool,
+  patch: Partial<ToolSpec["function"]> & { kind?: PilotTool["kind"] },
+): PilotTool {
   const { kind, ...fn } = patch;
   return { ...tool, kind: kind ?? tool.kind, spec: { type: "function", function: { ...tool.spec.function, ...fn } } };
 }

@@ -1,23 +1,9 @@
 import { ANY_TIER_SELECTOR, CONTEXT_ATTR, HINT_ATTR, PANEL_ATTR, READ_ATTR, TIER_ATTR, type Tier } from "./attrs";
 import { manifestAreas, manifestRules, renderLabel, safeQueryAll } from "./manifest";
-
-export interface ScreenElement {
-  /** The key the model targets — the label, ordinal-suffixed on collision (`Project card #2`). */
-  key: string;
-  /** Label plus the field's current value or readable text, when present. */
-  description: string;
-  tier: Tier;
-  /** `data-pilot-hint`: guidance for the model, never shown to the user. */
-  hint?: string;
-}
+import type { AreaContext, ScreenElement } from "./screen";
 
 export interface ScannedElement extends ScreenElement {
   el: HTMLElement;
-}
-
-export interface AreaContext {
-  topic: string;
-  description: string;
 }
 
 export interface ScanOptions {
@@ -57,9 +43,7 @@ function fieldValue(el: HTMLElement): string {
   if (el instanceof HTMLTextAreaElement) return clip(el.value, MAX_VALUE_LEN);
   if (el instanceof HTMLSelectElement) return clip(el.selectedOptions[0]?.text ?? el.value, MAX_VALUE_LEN);
   if (el.isContentEditable) return clip(el.textContent ?? "", MAX_VALUE_LEN);
-  const inner = el.querySelector<HTMLInputElement | HTMLTextAreaElement>(
-    "input:not([type=password]), textarea",
-  );
+  const inner = el.querySelector<HTMLInputElement | HTMLTextAreaElement>("input:not([type=password]), textarea");
   return inner ? clip(inner.value, MAX_VALUE_LEN) : "";
 }
 
@@ -118,11 +102,21 @@ function candidates(root: ParentNode, tiers: Tier[]): Candidate[] {
 // Ordinals are counted over one shared map across tiers: the model sees a
 // single key namespace, so "X" in both tiers must become "X" and "X #2".
 function withKeys(list: Candidate[]): Array<Candidate & { key: string }> {
+  const taken = new Set(list.map((c) => c.label));
+  const firsts = new Set<string>();
   const counts = new Map<string, number>();
   return list.map((c) => {
-    const n = (counts.get(c.label) ?? 0) + 1;
+    if (!firsts.has(c.label)) {
+      firsts.add(c.label);
+      return { ...c, key: c.label };
+    }
+    let n = counts.get(c.label) ?? 1;
+    let key: string;
+    do key = `${c.label} #${++n}`;
+    while (taken.has(key));
     counts.set(c.label, n);
-    return { ...c, key: n === 1 ? c.label : `${c.label} #${n}` };
+    taken.add(key);
+    return { ...c, key };
   });
 }
 
@@ -135,7 +129,8 @@ function toScreenElement({ el, label, tier, key, hint: rawHint, read }: Candidat
 function scanTier(tier: Tier, opts: ScanOptions): ScannedElement[] {
   if (typeof document === "undefined") return [];
   const root = opts.root ?? document;
-  return withKeys(candidates(root, [tier]))
+  return withKeys(candidates(root, ["ambient", "item"]))
+    .filter((c) => c.tier === tier)
     .slice(0, opts.maxElements ?? DEFAULT_MAX_ELEMENTS)
     .map((c) => ({ ...toScreenElement(c), el: c.el }));
 }
@@ -184,7 +179,10 @@ export function scanContext(root?: ParentNode): AreaContext | null {
   for (const el of scope.querySelectorAll<HTMLElement>(`[${CONTEXT_ATTR.topic}]`)) {
     const topic = (el.getAttribute(CONTEXT_ATTR.topic) ?? "").trim();
     if (topic && markerReachable(el)) {
-      markers.push({ el, area: { topic, description: (el.getAttribute(CONTEXT_ATTR.description) ?? "").trim() || topic } });
+      markers.push({
+        el,
+        area: { topic, description: (el.getAttribute(CONTEXT_ATTR.description) ?? "").trim() || topic },
+      });
     }
   }
   for (const area of manifestAreas()) {

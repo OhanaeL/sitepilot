@@ -11,6 +11,8 @@ export interface PilotStrings {
   screenOff: string;
   unknownTool(name: string): string;
   toolThrew(name: string, message: string): string;
+  /** The result recorded for a tool call that was still running when the user stopped the run. */
+  stopped: string;
   attachmentsNote: string;
   screenshotOmitted: string;
   /** The synthetic user turn sent when the user clicks a highlighted element. */
@@ -39,9 +41,12 @@ export const DEFAULT_STRINGS: PilotStrings = {
   noItems: "(no item elements are on screen right now)",
   toolNotEnabled: (name) =>
     `The "${name}" tool is not enabled by the user. Use only the tools offered this turn, or tell the user what to do themselves.`,
-  screenOff: "The user has switched off every UI action, so the screen cannot be read. Answer from the conversation instead.",
+  screenOff:
+    "The user has switched off every UI action, so the screen cannot be read. Answer from the conversation instead.",
   unknownTool: (name) => `Unknown tool "${name}".`,
   toolThrew: (name, message) => `Tool "${name}" failed: ${message}`,
+  stopped:
+    "The user stopped the run while this was in progress, so it may or may not have taken effect. Check the screen before trying it again.",
   attachmentsNote: "Attached: media produced by the tool calls above.",
   screenshotOmitted: "[screenshot omitted — it was only valid for that turn]",
   userClicked: (key) => `I clicked "${key}".`,
@@ -57,7 +62,9 @@ export const DEFAULT_STRINGS: PilotStrings = {
   },
 };
 
-export type PilotStringsOverride = Partial<Omit<PilotStrings, "activity">> & { activity?: Partial<PilotStrings["activity"]> };
+export type PilotStringsOverride = Partial<Omit<PilotStrings, "activity">> & {
+  activity?: Partial<PilotStrings["activity"]>;
+};
 
 export function mergeStrings(override?: PilotStringsOverride): PilotStrings {
   if (!override) return DEFAULT_STRINGS;

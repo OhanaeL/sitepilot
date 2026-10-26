@@ -1,6 +1,14 @@
 import { computerPlugin } from "@sitepilot/computer";
 import { openaiTransport } from "@sitepilot/core";
-import { defineTool, mark, markContext, markItem, markRead, SitepilotProvider, SitepilotWidget } from "@sitepilot/react";
+import {
+  defineTool,
+  mark,
+  markContext,
+  markItem,
+  markRead,
+  SitepilotProvider,
+  SitepilotWidget,
+} from "@sitepilot/react";
 import { toCanvas } from "html-to-image";
 import { useState } from "react";
 
@@ -102,14 +110,17 @@ export function App() {
       history={{ initial: savedHistory(), onChange: (h) => localStorage.setItem(HISTORY_KEY, JSON.stringify(h)) }}
       strings={{ activity: { highlighted: (key) => `👉 ${key}` } }}
     >
-      <div className="app" {...markContext("acme-projects", "Acme Projects: a workspace where the user manages projects.")}>
+      <div
+        className="app"
+        {...markContext("acme-projects", "Acme Projects: a workspace where the user manages projects.")}
+      >
         <aside>
           <div className="brand">Acme</div>
           <nav>
-            <button className={tab === "projects" ? "on" : ""} onClick={() => setTab("projects")}>
+            <button type="button" className={tab === "projects" ? "on" : ""} onClick={() => setTab("projects")}>
               Projects
             </button>
-            <button className={tab === "settings" ? "on" : ""} onClick={() => setTab("settings")}>
+            <button type="button" className={tab === "settings" ? "on" : ""} onClick={() => setTab("settings")}>
               Settings
             </button>
           </nav>
@@ -138,7 +149,9 @@ export function App() {
                     <button
                       className="card"
                       onClick={() => setSelected(p)}
-                      {...markItem(`Project card: ${p.name}`, { hint: `Owner ${p.owner}, ${p.status}. Click opens its details panel.` })}
+                      {...markItem(`Project card: ${p.name}`, {
+                        hint: `Owner ${p.owner}, ${p.status}. Click opens its details panel.`,
+                      })}
                     >
                       <strong>{p.name}</strong>
                       <span>{p.owner}</span>
@@ -157,7 +170,9 @@ export function App() {
                   <button
                     onClick={() =>
                       setProjects((ps) =>
-                        ps.map((p) => (p.id === selected.id ? { ...p, status: p.status === "active" ? "paused" : "active" } : p)),
+                        ps.map((p) =>
+                          p.id === selected.id ? { ...p, status: p.status === "active" ? "paused" : "active" } : p,
+                        ),
                       )
                     }
                     {...mark(`Toggle status button (${selected.name})`)}

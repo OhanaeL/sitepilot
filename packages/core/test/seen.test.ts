@@ -4,7 +4,17 @@ import { locateSeen, showSeen } from "../src/seen";
 
 const at = (el: Element, left: number, top: number, width: number, height: number) => {
   el.getBoundingClientRect = () =>
-    ({ left, top, right: left + width, bottom: top + height, x: left, y: top, width, height, toJSON: () => ({}) }) as DOMRect;
+    ({
+      left,
+      top,
+      right: left + width,
+      bottom: top + height,
+      x: left,
+      y: top,
+      width,
+      height,
+      toJSON: () => ({}),
+    }) as DOMRect;
 };
 
 const byId = (id: string) => document.getElementById(id)!;
@@ -92,6 +102,32 @@ describe("locateSeen", () => {
     ]);
   });
 
+  test("clipped or transparent but tucked under a sticky header still counts as out of view", () => {
+    document.body.innerHTML = `
+      <header id="h" style="position: sticky"><a id="link"></a></header>
+      <div id="rail" style="overflow-x: auto"><b id="next" data-pilot="Next slide"></b></div>
+      <b id="ghost" data-pilot="Ghost" style="opacity: 0"></b>`;
+    at(byId("rail"), 0, 0, 300, 40);
+    at(byId("next"), 400, 0, 300, 40);
+    at(byId("ghost"), 0, 10, 100, 20);
+    hits = () => [byId("link")];
+    expect(locateSeen().map((e) => e.sighting)).toEqual(["offscreen", "offscreen"]);
+  });
+
+  test("body overflow handed to the viewport clips nothing once the page scrolls", () => {
+    document.body.innerHTML = `<button id="a" data-pilot="Save"></button>`;
+    at(byId("a"), 100, 100, 200, 40);
+    hits = () => [byId("a")];
+    document.body.style.overflowX = "hidden";
+    at(document.body, 0, -2000, 1024, 768);
+    try {
+      expect(locateSeen()[0]?.sighting).toBe("visible");
+    } finally {
+      document.body.style.overflowX = "";
+      Reflect.deleteProperty(document.body, "getBoundingClientRect");
+    }
+  });
+
   test("stops at the prompt's own cap when it is below the scan's", () => {
     document.body.innerHTML = `<b data-pilot="A"></b><b data-pilot="B"></b><b data-pilot="C"></b>`;
     expect(locateSeen({ embedded: 2 }).map((e) => e.key)).toEqual(["A", "B"]);
@@ -125,5 +161,32 @@ describe("showSeen", () => {
     expect(byId("a").style.getPropertyValue("outline-color")).toBe("green");
     expect(byId("a").style.getPropertyValue("outline-width")).toBe("1px");
     expect(byId("c").style.getPropertyValue("outline-style")).toBe("");
+  });
+
+  test("a second view replaces the first, and the page is restored whichever is hidden first", () => {
+    document.body.innerHTML = `<button id="a" data-pilot="Save" style="color: red"></button>`;
+    at(byId("a"), 100, 100, 200, 40);
+    hits = () => [byId("a")];
+    const first = showSeen();
+    const second = showSeen();
+    expect(document.querySelectorAll("[data-sitepilot-seen]")).toHaveLength(1);
+    first();
+    expect(byId("a").style.getPropertyValue("outline-style")).toBe("solid");
+    second();
+    expect(byId("a").style.getPropertyValue("outline-style")).toBe("");
+    expect(byId("a").style.getPropertyValue("color")).toBe("red");
+  });
+
+  test("redraws when the page changes an outlined element's inline style", async () => {
+    document.body.innerHTML = `<button id="a" data-pilot="Save"></button>`;
+    at(byId("a"), 100, 100, 200, 40);
+    hits = () => [byId("a")];
+    const hide = showSeen();
+    expect(byId("a").style.getPropertyValue("outline-style")).toBe("solid");
+    at(byId("a"), 100, 5000, 200, 40);
+    byId("a").style.setProperty("transform", "translateY(4900px)");
+    await new Promise((r) => setTimeout(r, 150));
+    expect(byId("a").style.getPropertyValue("outline-style")).toBe("");
+    hide();
   });
 });

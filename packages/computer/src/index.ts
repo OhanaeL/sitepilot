@@ -1,5 +1,5 @@
 import { beginAgentAction, endAgentAction, type PilotPlugin, type PilotTool, type ToolOutput } from "@sitepilot/core";
-import { COORD_MAX, MAX_ACTIONS, parseBatch, REJECTED, SCHEMA, type Action } from "./batch";
+import { COORD_MAX, MAX_ACTIONS, parseBatch, REJECTED, SCHEMA, type Action, type Batch } from "./batch";
 import {
   elementAt,
   frameElements,
@@ -83,7 +83,8 @@ async function run(action: Action, root: ParentNode | undefined): Promise<string
   switch (action.do) {
     case "click": {
       const hit = elementAt(action.x, action.y, vp, root);
-      if (!hit) return `no opted-in element at (${action.x}, ${action.y}) — only boxes shown in the frame can be clicked`;
+      if (!hit)
+        return `no opted-in element at (${action.x}, ${action.y}) — only boxes shown in the frame can be clicked`;
       beginAgentAction();
       try {
         hit.el.focus?.();
@@ -105,8 +106,7 @@ async function run(action: Action, root: ParentNode | undefined): Promise<string
       return null;
     }
     case "scroll": {
-      const hit =
-        action.x !== undefined && action.y !== undefined ? elementAt(action.x, action.y, vp, root) : null;
+      const hit = action.x !== undefined && action.y !== undefined ? elementAt(action.x, action.y, vp, root) : null;
       const target = scrollTarget(hit);
       const dy = action.dy * 100;
       if (target instanceof Window) target.scrollBy({ top: dy });
@@ -139,7 +139,7 @@ export function computerPlugin(options: ComputerPluginOptions = {}): PilotPlugin
       },
     },
     async execute(args, ctx): Promise<ToolOutput> {
-      let batch;
+      let batch: Batch;
       try {
         batch = parseBatch(args);
       } catch (err) {

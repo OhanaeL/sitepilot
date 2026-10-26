@@ -1,5 +1,4 @@
-import type { AreaContext, ScreenElement } from "./dom";
-import type { UserEvent } from "./events";
+import type { AreaContext, ScreenElement, UserEvent } from "./screen";
 
 export interface ScreenContext {
   path: string;
@@ -98,6 +97,6 @@ export function buildSystemPrompt(ctx: PromptContext, opts: PromptOptions = {}):
     user,
     ctx.extra ?? "",
   ]
-    .filter((s) => s && s.trim())
+    .filter((s) => s?.trim())
     .join("\n\n");
 }

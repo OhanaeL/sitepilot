@@ -77,6 +77,53 @@ describe("createPilot", () => {
     ]);
   });
 
+  test("a stopped run finishing late leaves the run that replaced it alone", async () => {
+    const pending: Array<(r: CompletionReply) => void> = [];
+    const transport: Transport = {
+      complete: () => new Promise((resolve) => pending.push(resolve)),
+    };
+    const pilot = createPilot({ transport });
+    const first = pilot.send("one");
+    await Promise.resolve();
+    pilot.stop();
+    const second = pilot.send("two");
+    await new Promise((r) => setTimeout(r, 0));
+    pending[0]!({ content: "late", toolCalls: [], wireToolCalls: [] });
+    await first;
+    expect(pilot.getState().status).toBe("thinking");
+    pilot.stop();
+    pending[1]!({ content: "too late", toolCalls: [], wireToolCalls: [] });
+    await second;
+    expect(pilot.getState().messages.map((m) => m.content)).toEqual(["one", "two"]);
+  });
+
+  test("a tool still running when the user stops is answered before the next turn, never after it", async () => {
+    let finish = () => {};
+    const slow = {
+      kind: "action" as const,
+      spec: {
+        type: "function" as const,
+        function: { name: "slow", description: "slow", parameters: { type: "object", properties: {} } },
+      },
+      execute: () => new Promise<string>((resolve) => (finish = () => resolve("finished"))),
+    };
+    const transport = scripted([call("slow", {}), { content: "two done" }]);
+    const pilot = createPilot({ transport, plugins: [{ name: "p", tools: [slow] }] });
+    const first = pilot.send("one");
+    await new Promise((r) => setTimeout(r, 0));
+    pilot.stop();
+    await pilot.send("two");
+    finish();
+    await first;
+    expect(pilot.getHistory().map((m) => [m.role, m.role === "tool" ? m.content : undefined])).toEqual([
+      ["user", undefined],
+      ["assistant", undefined],
+      ["tool", pilot.strings.stopped],
+      ["user", undefined],
+      ["assistant", undefined],
+    ]);
+  });
+
   test("fill updates a controlled-style input and dispatches input", async () => {
     document.body.innerHTML = `<input data-pilot="Name field">`;
     const input = document.querySelector("input")!;
@@ -162,10 +209,12 @@ describe("createPilot", () => {
     await pilot.send("b");
     await first;
     await new Promise((r) => setTimeout(r, 0));
-    expect(pilot.getState().messages.filter((m) => m.role === "assistant").map((m) => m.content)).toEqual([
-      "one",
-      "two",
-    ]);
+    expect(
+      pilot
+        .getState()
+        .messages.filter((m) => m.role === "assistant")
+        .map((m) => m.content),
+    ).toEqual(["one", "two"]);
   });
 
   test("history is trimmed at a user boundary", async () => {
@@ -187,7 +236,10 @@ describe("plugins", () => {
     tools: [
       {
         kind: "action" as const,
-        spec: { type: "function" as const, function: { name: "snap", description: "snap", parameters: { type: "object", properties: {} } } },
+        spec: {
+          type: "function" as const,
+          function: { name: "snap", description: "snap", parameters: { type: "object", properties: {} } },
+        },
         execute: async () => ({
           content: "snapped",
           attachments: [{ type: "image_url" as const, image_url: { url: "data:image/png;base64,AAAA" } }],
@@ -229,11 +281,24 @@ describe("plugins", () => {
   });
 
   test("a throwing tool becomes a tool result, not a pilot error", async () => {
-    const bad = { name: "bad", tools: [{ ...plugin.tools[0]!, execute: async () => { throw new Error("lens cap"); } }] };
+    const bad = {
+      name: "bad",
+      tools: [
+        {
+          ...plugin.tools[0]!,
+          execute: async () => {
+            throw new Error("lens cap");
+          },
+        },
+      ],
+    };
     const transport = scripted([call("snap", {}), { content: "ok" }]);
     const pilot = createPilot({ transport, plugins: [bad] });
     await pilot.send("look");
-    expect(transport.requests[1]!.messages.at(-1)).toMatchObject({ role: "tool", content: expect.stringContaining("lens cap") });
+    expect(transport.requests[1]!.messages.at(-1)).toMatchObject({
+      role: "tool",
+      content: expect.stringContaining("lens cap"),
+    });
     expect(pilot.getState().error).toBeNull();
   });
 });
@@ -344,7 +409,10 @@ describe("customization", () => {
     const pilot = createPilot({
       transport,
       history: {
-        initial: [{ role: "user", content: "one?" }, { role: "assistant", content: "one." }],
+        initial: [
+          { role: "user", content: "one?" },
+          { role: "assistant", content: "one." },
+        ],
         onChange: (h) => changes.push(h.length),
       },
     });
@@ -376,6 +444,9 @@ describe("hints option", () => {
     const transport = scripted([call("get_screen_elements", {}), { content: "ok" }]);
     await createPilot({ transport, hints: { "Save button": "server-ish hint", Card: "map hint" } }).send("look");
     expect(transport.requests[0]!.messages[0]!.content).toContain("- Save button: Save button — server-ish hint");
-    expect(transport.requests[1]!.messages.at(-1)).toMatchObject({ role: "tool", content: "- Card: Card — own hint map hint" });
+    expect(transport.requests[1]!.messages.at(-1)).toMatchObject({
+      role: "tool",
+      content: "- Card: Card — own hint map hint",
+    });
   });
 });

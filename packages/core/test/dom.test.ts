@@ -74,6 +74,23 @@ describe("resolveKey", () => {
     expect(resolveKey("Card #2")?.id).toBe("b");
   });
 
+  test("the prompt, get_screen_elements and the resolver agree on keys when a label is in both tiers", () => {
+    document.body.innerHTML = `<b id="i" data-pilot-item="Card"></b><b id="a" data-pilot="Card"></b>`;
+    const [ambient] = scanAmbient();
+    const [item] = scanItems();
+    expect([ambient?.key, item?.key]).toEqual(["Card #2", "Card"]);
+    expect(resolveKey(ambient!.key)?.id).toBe("a");
+    expect(resolveKey(item!.key)?.id).toBe("i");
+  });
+
+  test("an ordinal never reuses a label that is already on the page", () => {
+    document.body.innerHTML = `
+      <b id="a" data-pilot="Save #2"></b><b id="b" data-pilot="Save"></b><b id="c" data-pilot="Save"></b>`;
+    expect(scanAmbient().map((e) => e.key)).toEqual(["Save #2", "Save", "Save #3"]);
+    expect(resolveKey("Save #2")?.id).toBe("a");
+    expect(resolveKey("Save #3")?.id).toBe("c");
+  });
+
   test("paraphrased key resolves when unique, not when ambiguous or tiny", () => {
     document.body.innerHTML = `
       <b id="cp" data-pilot="Create Project button — opens the dialog"></b>
@@ -92,8 +109,15 @@ describe("resolveKey", () => {
 describe("hints", () => {
   test("data-pilot-hint rides along, clipped, and mark() helpers emit it", async () => {
     const { mark, markItem, HINT_ATTR } = await import("../src/attrs");
-    expect(mark("Save button", { hint: "Safe to click." })).toEqual({ "data-pilot": "Save button", [HINT_ATTR]: "Safe to click." });
-    expect(markItem("Card", { hint: "h", read: true })).toEqual({ "data-pilot-item": "Card", [HINT_ATTR]: "h", "data-pilot-read": "" });
+    expect(mark("Save button", { hint: "Safe to click." })).toEqual({
+      "data-pilot": "Save button",
+      [HINT_ATTR]: "Safe to click.",
+    });
+    expect(markItem("Card", { hint: "h", read: true })).toEqual({
+      "data-pilot-item": "Card",
+      [HINT_ATTR]: "h",
+      "data-pilot-read": "",
+    });
     document.body.innerHTML = `<button data-pilot="Save button" data-pilot-hint="Saves the draft. Pro plan only."></button><b data-pilot="Plain"></b>`;
     const [save, plain] = scanAmbient();
     expect(save?.hint).toBe("Saves the draft. Pro plan only.");

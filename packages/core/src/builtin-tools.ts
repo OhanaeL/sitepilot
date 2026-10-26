@@ -1,6 +1,7 @@
 import { click, fill, highlight } from "./actions";
-import { scanItems, type ScreenElement } from "./dom";
+import { scanItems } from "./dom";
 import { renderElement, type Hints } from "./prompt";
+import type { ScreenElement } from "./screen";
 import { patchTool, type PilotTool, type ToolSpec } from "./tools";
 
 export type ActionToolName = "highlight_element" | "click_element" | "fill_field";
@@ -13,7 +14,8 @@ const settle = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, m
 
 const TARGET = {
   type: "string",
-  description: "Key of the on-screen element, exactly as listed under CURRENT SCREEN or returned by get_screen_elements.",
+  description:
+    "Key of the on-screen element, exactly as listed under CURRENT SCREEN or returned by get_screen_elements.",
 };
 
 const listOf = (found: ScreenElement[], empty: string, hints?: Hints): string =>

@@ -20,7 +20,15 @@ const computer = (args: Record<string, unknown>, id = "c1") => ({
 });
 
 const box = (left: number, top: number, w: number, h: number) => ({
-  x: left, y: top, left, top, width: w, height: h, right: left + w, bottom: top + h, toJSON: () => ({}),
+  x: left,
+  y: top,
+  left,
+  top,
+  width: w,
+  height: h,
+  right: left + w,
+  bottom: top + h,
+  toJSON: () => ({}),
 });
 
 function place(el: Element, left: number, top: number, w: number, h: number): void {
@@ -42,7 +50,16 @@ describe("parseBatch", () => {
   });
 
   test("validates each action's fields", () => {
-    expect(parseBatch({ actions: [{ do: "click", x: 1, y: 2 }, { do: "type", text: "a" }, { do: "scroll", dy: -3 }, { do: "wait", ms: 10 }] }).actions).toHaveLength(4);
+    expect(
+      parseBatch({
+        actions: [
+          { do: "click", x: 1, y: 2 },
+          { do: "type", text: "a" },
+          { do: "scroll", dy: -3 },
+          { do: "wait", ms: 10 },
+        ],
+      }).actions,
+    ).toHaveLength(4);
     expect(() => parseBatch({ actions: [{ do: "click", x: 1 }] })).toThrow("click needs");
     expect(() => parseBatch({ actions: [{ do: "click", x: 1000, y: 0 }] })).toThrow();
     expect(() => parseBatch({ actions: [{ do: "wait", ms: 5000 }] })).toThrow("wait needs");
@@ -85,7 +102,13 @@ describe("computer tool through the pilot", () => {
     await createPilot({ transport, plugins }).send("what do you see?");
     expect(transport.requests[0]!.messages[0]!.content).toContain("THE FRAME IS NOT THE WHOLE PAGE");
     const outcome = lastOutcome(transport);
-    expect(outcome).toMatchObject({ executed: 0, requested: 0, failed: null, screenshot: "attached", screen: { w: 1000, h: 500 } });
+    expect(outcome).toMatchObject({
+      executed: 0,
+      requested: 0,
+      failed: null,
+      screenshot: "attached",
+      screen: { w: 1000, h: 500 },
+    });
     expect(outcome.elements).toEqual([{ key: "Save button", x: 10, y: 20, w: 100, h: 40 }]);
     expect(transport.requests[1]!.messages.at(-1)).toMatchObject({
       role: "user",
@@ -101,7 +124,14 @@ describe("computer tool through the pilot", () => {
     let clicks = 0;
     document.getElementById("b")!.addEventListener("click", () => clicks++);
     const transport = scripted([
-      computer({ actions: [{ do: "click", x: 250, y: 50 }, { do: "type", text: "acme" }, { do: "click", x: 650, y: 50 }, { do: "wait", ms: 1 }] }),
+      computer({
+        actions: [
+          { do: "click", x: 250, y: 50 },
+          { do: "type", text: "acme" },
+          { do: "click", x: 650, y: 50 },
+          { do: "wait", ms: 1 },
+        ],
+      }),
       { content: "done" },
     ]);
     await createPilot({ transport, plugins }).send("search acme");
@@ -114,7 +144,13 @@ describe("computer tool through the pilot", () => {
     document.body.innerHTML = `<button data-pilot="Only"></button>`;
     place(document.querySelector("button")!, 0, 0, 10, 10);
     const transport = scripted([
-      computer({ actions: [{ do: "wait", ms: 1 }, { do: "click", x: 900, y: 900 }, { do: "wait", ms: 1 }] }),
+      computer({
+        actions: [
+          { do: "wait", ms: 1 },
+          { do: "click", x: 900, y: 900 },
+          { do: "wait", ms: 1 },
+        ],
+      }),
       { content: "hm" },
     ]);
     await createPilot({ transport, plugins }).send("click somewhere");
