@@ -51,6 +51,15 @@ function intersect(a: Rect, b: Rect): Rect | null {
 
 const CLIPS = /(hidden|clip|scroll|auto)/;
 
+// While <html> has visible overflow, <body>'s overflow applies to the viewport,
+// so <body> itself clips nothing.
+const overflows = (s: CSSStyleDeclaration) => CLIPS.test(`${s.overflowX} ${s.overflowY}`);
+
+function clips(p: HTMLElement, s: CSSStyleDeclaration): boolean {
+  if (!overflows(s)) return false;
+  return p !== document.body || overflows(getComputedStyle(document.documentElement));
+}
+
 function clipAndOpacity(el: HTMLElement, box: Rect): { clip: Rect | null; transparent: boolean } {
   let clip = intersect(box, viewport());
   const own = getComputedStyle(el);
@@ -58,7 +67,7 @@ function clipAndOpacity(el: HTMLElement, box: Rect): { clip: Rect | null; transp
   for (let p = el.parentElement; p && p !== document.documentElement; p = p.parentElement) {
     const s = getComputedStyle(p);
     if (s.opacity === "0") transparent = true;
-    if (clip && CLIPS.test(`${s.overflowX} ${s.overflowY}`)) clip = intersect(clip, rectOf(p.getBoundingClientRect()));
+    if (clip && clips(p, s)) clip = intersect(clip, rectOf(p.getBoundingClientRect()));
   }
   return { clip, transparent };
 }
@@ -76,19 +85,30 @@ function pinned(hit: Element, el: HTMLElement): boolean {
   return false;
 }
 
+function samples(area: Rect): Array<[x: number, y: number]> {
+  return Array.from({ length: SAMPLE_ROWS * SAMPLE_COLS }, (_, i) => [
+    area.left + (((i % SAMPLE_COLS) + 0.5) / SAMPLE_COLS) * (area.right - area.left),
+    area.top + ((Math.floor(i / SAMPLE_COLS) + 0.5) / SAMPLE_ROWS) * (area.bottom - area.top),
+  ]);
+}
+
+const isOwn = (hit: Element, el: HTMLElement) => el.contains(hit) || hit.contains(el);
+
 function sightingIn(el: HTMLElement, clip: Rect): Sighting {
   let onlyPinned = true;
-  for (let r = 0; r < SAMPLE_ROWS; r++) {
-    for (let c = 0; c < SAMPLE_COLS; c++) {
-      const hit = topmost(
-        clip.left + ((c + 0.5) / SAMPLE_COLS) * (clip.right - clip.left),
-        clip.top + ((r + 0.5) / SAMPLE_ROWS) * (clip.bottom - clip.top),
-      );
-      if (hit && (el.contains(hit) || hit.contains(el))) return "visible";
-      if (!hit || !pinned(hit, el)) onlyPinned = false;
-    }
+  for (const [x, y] of samples(clip)) {
+    const hit = topmost(x, y);
+    if (hit && isOwn(hit, el)) return "visible";
+    if (!hit || !pinned(hit, el)) onlyPinned = false;
   }
   return onlyPinned ? "offscreen" : "hidden";
+}
+
+function underPinned(el: HTMLElement, area: Rect): boolean {
+  return samples(area).every(([x, y]) => {
+    const hit = topmost(x, y);
+    return !!hit && !isOwn(hit, el) && pinned(hit, el);
+  });
 }
 
 /** Every element the model is sent (same keys and cap as the prompt), and whether the user can see it. */
@@ -100,12 +120,15 @@ export function locateSeen(
   const list = opts.items === false ? ambient : [...ambient, ...tiers.item];
   return list.map(({ key, tier, el }) => {
     const box = rectOf(el.getBoundingClientRect());
+    const inView = intersect(box, viewport());
     const { clip, transparent } = clipAndOpacity(el, box);
-    const sighting: Sighting = !intersect(box, viewport())
+    const sighting: Sighting = !inView
       ? "offscreen"
       : clip && !transparent
         ? sightingIn(el, clip)
-        : "hidden";
+        : underPinned(el, inView)
+          ? "offscreen"
+          : "hidden";
     return { key, tier, el, sighting, box };
   });
 }
