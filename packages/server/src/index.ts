@@ -46,7 +46,7 @@ export interface PilotHandlerOptions {
    * Server-side prompt composition. When the browser runs `prompt: "server"` it
    * sends a `sitepilot` context instead of a system message; this renders it
    * here so your wording never ships to the client. `system` replaces the
-   * default base instructions.
+   * default base instructions. While set, system messages from the client are dropped.
    */
   prompt?: ServerPromptOptions;
   /** Rewrite advertised tool descriptions by name, e.g. `{ click_element: "…" }`. */
@@ -256,8 +256,9 @@ export function createPilotHandler(options: PilotHandlerOptions): (req: Request)
     if (!Array.isArray(body["messages"]) || body["messages"].length === 0) return error(400, "messages required");
     if (body["messages"].length > maxMessages) return error(400, `at most ${maxMessages} messages`);
 
-    const messages = body["messages"].map(cleanMessage);
-    if (messages.some((m) => m === null)) return error(400, "malformed message");
+    const cleaned = body["messages"].map(cleanMessage);
+    if (cleaned.some((m) => m === null)) return error(400, "malformed message");
+    const messages = options.prompt ? cleaned.filter((m) => m!["role"] !== "system") : cleaned;
     const tools = Array.isArray(body["tools"])
       ? body["tools"].map((t) => cleanTool(t, options.toolDescriptions ?? {})).filter(Boolean)
       : [];
