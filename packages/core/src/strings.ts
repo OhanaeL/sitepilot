@@ -11,7 +11,7 @@ export interface PilotStrings {
   screenOff: string;
   unknownTool(name: string): string;
   toolThrew(name: string, message: string): string;
-  /** The result recorded for a tool call the user stopped before it finished. */
+  /** The result recorded for a tool call that was still running when the user stopped the run. */
   stopped: string;
   attachmentsNote: string;
   screenshotOmitted: string;
@@ -45,7 +45,8 @@ export const DEFAULT_STRINGS: PilotStrings = {
     "The user has switched off every UI action, so the screen cannot be read. Answer from the conversation instead.",
   unknownTool: (name) => `Unknown tool "${name}".`,
   toolThrew: (name, message) => `Tool "${name}" failed: ${message}`,
-  stopped: "The user stopped this before it finished.",
+  stopped:
+    "The user stopped the run while this was in progress, so it may or may not have taken effect. Check the screen before trying it again.",
   attachmentsNote: "Attached: media produced by the tool calls above.",
   screenshotOmitted: "[screenshot omitted — it was only valid for that turn]",
   userClicked: (key) => `I clicked "${key}".`,
