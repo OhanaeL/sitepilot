@@ -77,6 +77,26 @@ describe("createPilot", () => {
     ]);
   });
 
+  test("a stopped run finishing late leaves the run that replaced it alone", async () => {
+    const pending: Array<(r: CompletionReply) => void> = [];
+    const transport: Transport = {
+      complete: () => new Promise((resolve) => pending.push(resolve)),
+    };
+    const pilot = createPilot({ transport });
+    const first = pilot.send("one");
+    await Promise.resolve();
+    pilot.stop();
+    const second = pilot.send("two");
+    await new Promise((r) => setTimeout(r, 0));
+    pending[0]!({ content: "late", toolCalls: [], wireToolCalls: [] });
+    await first;
+    expect(pilot.getState().status).toBe("thinking");
+    pilot.stop();
+    pending[1]!({ content: "too late", toolCalls: [], wireToolCalls: [] });
+    await second;
+    expect(pilot.getState().messages.map((m) => m.content)).toEqual(["one", "two"]);
+  });
+
   test("fill updates a controlled-style input and dispatches input", async () => {
     document.body.innerHTML = `<input data-pilot="Name field">`;
     const input = document.querySelector("input")!;

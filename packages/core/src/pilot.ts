@@ -265,8 +265,9 @@ export function createPilot(options: PilotOptions): Pilot {
     }
 
     await ready;
-    abort = new AbortController();
-    const { signal } = abort;
+    const run = new AbortController();
+    abort = run;
+    const { signal } = run;
     push("user", trimmed);
     history = stripEphemeralMedia(history, strings.screenshotOmitted);
     record({ role: "user", content: trimmed });
@@ -317,12 +318,14 @@ export function createPilot(options: PilotOptions): Pilot {
     } catch (err) {
       if (!signal.aborted) set({ error: err instanceof Error ? err.message : String(err) });
     } finally {
-      abort = null;
-      answering = undefined;
-      set({ status: "idle" });
-      const next = queued;
-      queued = null;
-      if (next) void send(next);
+      if (abort === null || abort === run) {
+        abort = null;
+        answering = undefined;
+        set({ status: "idle" });
+        const next = queued;
+        queued = null;
+        if (next) void send(next);
+      }
     }
   }
 
