@@ -97,16 +97,19 @@ function withHeaders(res: Response, headers: Record<string, string>): Response {
 }
 
 /** null = same-origin (no CORS needed); a string = allowed cross-origin; false = rejected. */
+function hostOf(url: string): string | null {
+  try {
+    return new URL(url).host;
+  } catch {
+    return null;
+  }
+}
+
 function checkOrigin(req: Request, allow: string[] | undefined): string | null | false {
   const origin = req.headers.get("origin");
   if (!origin) return null;
-  let host = "";
-  try {
-    host = new URL(req.url).host;
-  } catch {
-    host = "";
-  }
-  if (new URL(origin).host === host) return null;
+  const host = hostOf(origin);
+  if (host !== null && host === hostOf(req.url)) return null;
   if (!allow) return false;
   if (allow.includes("*")) return "*";
   return allow.includes(origin) ? origin : false;

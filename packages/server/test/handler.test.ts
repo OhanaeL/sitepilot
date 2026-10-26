@@ -208,6 +208,13 @@ describe("CORS / allowOrigins", () => {
     expect(up.calls).toHaveLength(1);
   });
 
+  test("an opaque `Origin: null` (file:// pages, sandboxed iframes) is refused, not a crash", async () => {
+    const up = upstream();
+    const handler = createPilotHandler({ apiKey: "k", model: "m", fetch: up.fetch, allowOrigins: ["https://ohanael.github.io"] });
+    expect((await handler(post(body, { origin: "null" }))).status).toBe(403);
+    expect(up.calls).toHaveLength(0);
+  });
+
   test("no allowOrigins means any cross-origin caller is refused", async () => {
     const up = upstream();
     const handler = createPilotHandler({ apiKey: "k", model: "m", fetch: up.fetch });
