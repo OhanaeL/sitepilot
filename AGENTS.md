@@ -23,7 +23,7 @@ bun run dev:example
 ## Releasing
 - Record a change with `bunx changeset` in the PR that makes it. The four packages are one `fixed` group, so they always share a version.
 - To release: `bunx changeset version` (bumps versions, writes CHANGELOGs), commit, `bun run build`, then `bun publish` inside each package. Use `bun publish`, not `npm publish`: bun rewrites the `workspace:^` peer ranges to `^x.y.z`, npm would ship the `workspace:` protocol.
-- Nothing is on npm yet. The first publish ships `0.1.0` as is, and needs the `@sitepilot` npm org.
+- Nothing is on npm yet. Changes since `0.1.0` are recorded too, so the first `bunx changeset version` takes the group to `0.2.0`. The first publish needs the `@sitepilot` npm org.
 
 ## Load-bearing conventions
 - **Attribute contract lives in `packages/core/src/attrs.ts`** and is documented in the README table. Renaming an attribute is a breaking change for every consumer's markup.
