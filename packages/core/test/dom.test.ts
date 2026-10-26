@@ -74,6 +74,15 @@ describe("resolveKey", () => {
     expect(resolveKey("Card #2")?.id).toBe("b");
   });
 
+  test("the prompt, get_screen_elements and the resolver agree on keys when a label is in both tiers", () => {
+    document.body.innerHTML = `<b id="i" data-pilot-item="Card"></b><b id="a" data-pilot="Card"></b>`;
+    const [ambient] = scanAmbient();
+    const [item] = scanItems();
+    expect([ambient?.key, item?.key]).toEqual(["Card #2", "Card"]);
+    expect(resolveKey(ambient!.key)?.id).toBe("a");
+    expect(resolveKey(item!.key)?.id).toBe("i");
+  });
+
   test("paraphrased key resolves when unique, not when ambiguous or tiny", () => {
     document.body.innerHTML = `
       <b id="cp" data-pilot="Create Project button — opens the dialog"></b>

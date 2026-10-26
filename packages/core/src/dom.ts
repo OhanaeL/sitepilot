@@ -135,7 +135,8 @@ function toScreenElement({ el, label, tier, key, hint: rawHint, read }: Candidat
 function scanTier(tier: Tier, opts: ScanOptions): ScannedElement[] {
   if (typeof document === "undefined") return [];
   const root = opts.root ?? document;
-  return withKeys(candidates(root, [tier]))
+  return withKeys(candidates(root, ["ambient", "item"]))
+    .filter((c) => c.tier === tier)
     .slice(0, opts.maxElements ?? DEFAULT_MAX_ELEMENTS)
     .map((c) => ({ ...toScreenElement(c), el: c.el }));
 }
