@@ -156,6 +156,7 @@ export function computerPlugin(options: ComputerPluginOptions = {}): PilotPlugin
       let executed = 0;
       let failed: Failure | null = null;
       for (const [index, action] of batch.actions.entries()) {
+        if (ctx.signal.aborted) return { content: ctx.strings.stopped };
         const why = await run(action, options.root);
         if (why) {
           failed = { index, do: action.do, why };
@@ -163,6 +164,7 @@ export function computerPlugin(options: ComputerPluginOptions = {}): PilotPlugin
         }
         executed++;
       }
+      if (ctx.signal.aborted) return { content: ctx.strings.stopped };
       ctx.activity(
         batch.actions.length === 0
           ? "Looked at the screen"

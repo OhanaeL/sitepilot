@@ -252,7 +252,8 @@ export function createPilot(options: PilotOptions): Pilot {
     enabledTools: [...state.enabledTools],
   });
 
-  const toolContext = (by: string | undefined): ToolContext => ({
+  const toolContext = (by: string | undefined, signal: AbortSignal): ToolContext => ({
+    signal,
     screen: collectScreen,
     scan: options.scan,
     strings,
@@ -276,6 +277,7 @@ export function createPilot(options: PilotOptions): Pilot {
   async function executeTool(
     call: ToolCall,
     by: string | undefined,
+    signal: AbortSignal,
   ): Promise<{ content: string; attachments: ContentPart[] }> {
     const tool = tools().find((t) => t.spec.function.name === call.name);
     if (!tool) return { content: strings.unknownTool(call.name), attachments: [] };
@@ -285,7 +287,7 @@ export function createPilot(options: PilotOptions): Pilot {
       return { content: strings.toolNotEnabled(call.name), attachments: [] };
     }
     try {
-      const out = await tool.execute(call.args, toolContext(by));
+      const out = await tool.execute(call.args, toolContext(by, signal));
       return typeof out === "string"
         ? { content: out, attachments: [] }
         : { content: out.content, attachments: out.attachments ?? [] };
@@ -315,7 +317,7 @@ export function createPilot(options: PilotOptions): Pilot {
   async function runTools(calls: ToolCall[], signal: AbortSignal, by: string | undefined): Promise<void> {
     const attachments: ContentPart[] = [];
     for (const call of calls) {
-      const out = await executeTool(call, by);
+      const out = await executeTool(call, by, signal);
       if (signal.aborted) return;
       record({ role: "tool", tool_call_id: call.id, content: out.content });
       attachments.push(...out.attachments);

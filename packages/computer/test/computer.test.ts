@@ -176,6 +176,28 @@ describe("computer tool through the pilot", () => {
     });
   });
 
+  test("a batch stopped mid-way runs none of its remaining actions", async () => {
+    document.body.innerHTML = `<button id="b" data-pilot="Go"></button>`;
+    place(document.getElementById("b")!, 600, 0, 100, 50);
+    let clicks = 0;
+    document.getElementById("b")!.addEventListener("click", () => clicks++);
+    const transport = scripted([
+      computer({
+        actions: [
+          { do: "wait", ms: 100 },
+          { do: "click", x: 650, y: 50 },
+        ],
+      }),
+    ]);
+    const pilot = createPilot({ transport, plugins });
+    const sent = pilot.send("go");
+    await new Promise((r) => setTimeout(r, 20));
+    pilot.stop();
+    await sent;
+    await new Promise((r) => setTimeout(r, 150));
+    expect(clicks).toBe(0);
+  });
+
   test("type works in a field opted in by the manifest", async () => {
     document.body.innerHTML = `<input id="q">`;
     const field = document.getElementById("q") as HTMLInputElement;

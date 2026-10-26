@@ -32,7 +32,15 @@ export {
   getEvents,
   subscribeEvents,
 } from "./events";
-export { clearHighlight, click, fill, highlight, type ActionResult, type HighlightOptions } from "./actions";
+export {
+  clearHighlight,
+  click,
+  fill,
+  highlight,
+  type ActionResult,
+  type ActOptions,
+  type HighlightOptions,
+} from "./actions";
 export { locateSeen, showSeen, type Rect, type SeenElement, type ShowSeenOptions, type Sighting } from "./seen";
 export {
   defineTool,
