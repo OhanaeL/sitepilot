@@ -211,7 +211,6 @@ export function createPilot(options: PilotOptions): Pilot {
     state = { ...state, ...patch };
     for (const l of listeners) l();
   };
-  let toolsBy: string | undefined;
   const push = (role: PilotMessage["role"], content: string, by?: string): void =>
     set({ messages: [...state.messages, { id: newId(), role, content, ...(by && { by }) }] });
   const record = (entry: HistoryEntry): void => {
@@ -234,7 +233,7 @@ export function createPilot(options: PilotOptions): Pilot {
     enabledTools: [...state.enabledTools],
   });
 
-  const toolContext: ToolContext = {
+  const toolContext = (by: string | undefined): ToolContext => ({
     screen: collectScreen,
     scan: options.scan,
     strings,
@@ -247,15 +246,18 @@ export function createPilot(options: PilotOptions): Pilot {
     get user() {
       return resolve(options.user) ?? null;
     },
-    activity: (text) => push("activity", text, toolsBy),
+    activity: (text) => push("activity", text, by),
     enqueueUserTurn: (text) => {
       if (state.status === "idle") void send(text);
       else queued = text;
     },
     setHighlight: (key) => set({ activeHighlight: key ? { key } : null }),
-  };
+  });
 
-  async function executeTool(call: ToolCall): Promise<{ content: string; attachments: ContentPart[] }> {
+  async function executeTool(
+    call: ToolCall,
+    by: string | undefined,
+  ): Promise<{ content: string; attachments: ContentPart[] }> {
     const tool = tools().find((t) => t.spec.function.name === call.name);
     if (!tool) return { content: strings.unknownTool(call.name), attachments: [] };
     if (tool.kind === "utility" && state.enabledTools.length === 0)
@@ -264,7 +266,7 @@ export function createPilot(options: PilotOptions): Pilot {
       return { content: strings.toolNotEnabled(call.name), attachments: [] };
     }
     try {
-      const out = await tool.execute(call.args, toolContext);
+      const out = await tool.execute(call.args, toolContext(by));
       return typeof out === "string"
         ? { content: out, attachments: [] }
         : { content: out.content, attachments: out.attachments ?? [] };
@@ -293,16 +295,11 @@ export function createPilot(options: PilotOptions): Pilot {
 
   async function runTools(calls: ToolCall[], signal: AbortSignal, by: string | undefined): Promise<void> {
     const attachments: ContentPart[] = [];
-    toolsBy = by;
-    try {
-      for (const call of calls) {
-        const out = await executeTool(call);
-        record({ role: "tool", tool_call_id: call.id, content: out.content });
-        attachments.push(...out.attachments);
-        if (signal.aborted) return;
-      }
-    } finally {
-      toolsBy = undefined;
+    for (const call of calls) {
+      const out = await executeTool(call, by);
+      if (signal.aborted) return;
+      record({ role: "tool", tool_call_id: call.id, content: out.content });
+      attachments.push(...out.attachments);
     }
     if (attachments.length) {
       record({
@@ -333,6 +330,18 @@ export function createPilot(options: PilotOptions): Pilot {
     return "capped";
   }
 
+  // A stopped run can leave tool calls unanswered, and the API rejects a
+  // history where any tool call lacks a result right after it.
+  function answerOpenCalls(): void {
+    const last = history.map((m) => m.role).lastIndexOf("assistant");
+    const open = history[last];
+    if (open?.role !== "assistant" || !open.tool_calls) return;
+    const answered = new Set(history.slice(last + 1).map((m) => m.role === "tool" && m.tool_call_id));
+    for (const call of open.tool_calls) {
+      if (!answered.has(call.id)) record({ role: "tool", tool_call_id: call.id, content: strings.stopped });
+    }
+  }
+
   async function send(text: string): Promise<void> {
     const trimmed = text.trim();
     if (!trimmed) return;
@@ -346,6 +355,7 @@ export function createPilot(options: PilotOptions): Pilot {
     abort = run;
     push("user", trimmed);
     history = stripEphemeralMedia(history, strings.screenshotOmitted);
+    answerOpenCalls();
     record({ role: "user", content: trimmed });
     set({ status: "thinking", error: manifestError });
 
@@ -401,7 +411,8 @@ export function createPilot(options: PilotOptions): Pilot {
     showSeen: () =>
       showSeen({
         scan: options.scan,
-        items: () => state.enabledTools.length > 0,
+        items: () =>
+          state.enabledTools.length > 0 && tools().some((t) => t.spec.function.name === "get_screen_elements"),
         embedded: options.promptOptions?.maxEmbeddedElements ?? DEFAULT_MAX_EMBEDDED,
       }),
     strings,

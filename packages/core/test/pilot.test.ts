@@ -97,6 +97,33 @@ describe("createPilot", () => {
     expect(pilot.getState().messages.map((m) => m.content)).toEqual(["one", "two"]);
   });
 
+  test("a tool still running when the user stops is answered before the next turn, never after it", async () => {
+    let finish = () => {};
+    const slow = {
+      kind: "action" as const,
+      spec: {
+        type: "function" as const,
+        function: { name: "slow", description: "slow", parameters: { type: "object", properties: {} } },
+      },
+      execute: () => new Promise<string>((resolve) => (finish = () => resolve("finished"))),
+    };
+    const transport = scripted([call("slow", {}), { content: "two done" }]);
+    const pilot = createPilot({ transport, plugins: [{ name: "p", tools: [slow] }] });
+    const first = pilot.send("one");
+    await new Promise((r) => setTimeout(r, 0));
+    pilot.stop();
+    await pilot.send("two");
+    finish();
+    await first;
+    expect(pilot.getHistory().map((m) => [m.role, m.role === "tool" ? m.content : undefined])).toEqual([
+      ["user", undefined],
+      ["assistant", undefined],
+      ["tool", pilot.strings.stopped],
+      ["user", undefined],
+      ["assistant", undefined],
+    ]);
+  });
+
   test("fill updates a controlled-style input and dispatches input", async () => {
     document.body.innerHTML = `<input data-pilot="Name field">`;
     const input = document.querySelector("input")!;
