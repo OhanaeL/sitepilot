@@ -24,7 +24,7 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "peerDependencies": {
-    "@sitepilot/core": "workspace:*"
+    "@sitepilot/core": "workspace:^"
   },
   "devDependencies": {
     "@sitepilot/core": "workspace:*"

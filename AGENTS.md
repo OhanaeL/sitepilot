@@ -20,6 +20,11 @@ bun run lint        # biome ci: format + lint check, as CI runs it; `bun run for
 bun run dev:example
 ```
 
+## Releasing
+- Record a change with `bunx changeset` in the PR that makes it. The four packages are one `fixed` group, so they always share a version.
+- To release: `bunx changeset version` (bumps versions, writes CHANGELOGs), commit, `bun run build`, then `bun publish` inside each package. Use `bun publish`, not `npm publish`: bun rewrites the `workspace:^` peer ranges to `^x.y.z`, npm would ship the `workspace:` protocol.
+- Nothing is on npm yet. The first publish ships `0.1.0` as is, and needs the `@sitepilot` npm org.
+
 ## Load-bearing conventions
 - **Attribute contract lives in `packages/core/src/attrs.ts`** and is documented in the README table. Renaming an attribute is a breaking change for every consumer's markup.
 - **Ordinal keys are computed in one namespace across both tiers** (`withKeys` in `dom.ts`); the tier scans, `scanAll` and `resolveKey` must all share that path or the prompt and the resolver disagree on a key.
