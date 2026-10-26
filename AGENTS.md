@@ -13,15 +13,22 @@ Personal OSS project (OhanaeL). Bun workspaces monorepo; **not** a General-Magic
 ## Commands
 ```bash
 bun install
-bun run build       # core must be built before react/computer/example typecheck — they resolve @sitepilot/core via the workspace symlink to dist/
-bun test            # bun:test + happy-dom, preload in test/setup.ts (stubs getBoundingClientRect/scrollIntoView/ResizeObserver)
+bun run build
+bun run test        # bun:test + happy-dom, preload in test/setup.ts (stubs getBoundingClientRect/scrollIntoView/ResizeObserver)
 bun run typecheck
+bun run lint        # biome ci: format + lint check, as CI runs it; `bun run format` fixes
 bun run dev:example
 ```
 
+## Releasing
+- Record a change with `bunx changeset` in the PR that makes it. The four packages are one `fixed` group, so they always share a version.
+- To release: `bunx changeset version` (bumps versions, writes CHANGELOGs), commit, `bun run build`, then `bun publish` inside each package. Use `bun publish`, not `npm publish`: bun rewrites the `workspace:^` peer ranges to `^x.y.z`, npm would ship the `workspace:` protocol.
+- Nothing is on npm yet. The first publish ships `0.1.0` as is, and needs the `@sitepilot` npm org.
+
 ## Load-bearing conventions
 - **Attribute contract lives in `packages/core/src/attrs.ts`** and is documented in the README table. Renaming an attribute is a breaking change for every consumer's markup.
-- **Ordinal keys are computed in one namespace across both tiers** (`withKeys` in `dom.ts`); `scanAll` and `resolveKey` must share that path or targeting silently misses.
+- **Ordinal keys are computed in one namespace across both tiers** (`withKeys` in `dom.ts`); the tier scans, `scanAll` and `resolveKey` must all share that path or the prompt and the resolver disagree on a key.
+- **Workspace packages resolve `@sitepilot/core` from source** through the `@sitepilot/source` export condition (`customConditions` in `tsconfig.base.json`; `bun run test` passes `--conditions`). Build order doesn't matter and nothing reads a stale `dist/`. Plain `bun test` still resolves `dist/`.
 - **Tool consent is enforced in `pilot.ts`, not in tools**: actions must be in `enabledTools`; utilities need at least one enabled action.
 - **`tools`/`user`/`context` are getters read every round**; the React provider feeds them through a ref so the pilot is created once per `transport`/`plugins`/`prompt`/`systemPrompt` and still sees live state.
 - **Two prompt modes.** `prompt: "client"` builds the system message in the browser; `"server"` sends a `sitepilot` context field and no system message, and `@sitepilot/server` renders it (`cleanContext` re-validates it — treat it as untrusted). `@sitepilot/core/prompt` is the pure subpath the server imports; keep it free of DOM/driver.js imports.

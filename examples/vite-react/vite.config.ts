@@ -18,11 +18,13 @@ function pilotApi(env: Record<string, string>): Plugin {
           ].join(" "),
           extra: (_ctx, req) => `Request came from ${req.headers.get("user-agent")?.split(" ")[0] ?? "unknown"}.`,
           hints: {
-            "Password field": "NEVER read, fill, or mention this field's value. If asked, tell the user to change it themselves.",
+            "Password field":
+              "NEVER read, fill, or mention this field's value. If asked, tell the user to change it themselves.",
           },
         },
         toolDescriptions: {
-          click_element: "Click a button or link for the user. NEVER the Create/confirm button in the New project dialog.",
+          click_element:
+            "Click a button or link for the user. NEVER the Create/confirm button in the New project dialog.",
         },
         ...(env["PILOT_TYPESAFE_API_KEY"] && {
           router: jevRouter({

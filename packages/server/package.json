@@ -41,6 +41,6 @@
     "chat-completions"
   ],
   "peerDependencies": {
-    "@sitepilot/core": "workspace:*"
+    "@sitepilot/core": "workspace:^"
   }
 }

@@ -1,6 +1,6 @@
 import { Fragment, type ReactNode } from "react";
 
-const INLINE = /(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\((?:https?:\/\/|mailto:|\/)[^)\s]+\)|\*[^*\n]+\*)/g;
+const INLINE = /(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\((?:https?:\/\/|mailto:|\/(?![/\\]))[^)\s\\]+\)|\*[^*\n]+\*)/g;
 
 function inline(text: string, keyBase: string): ReactNode[] {
   return text.split(INLINE).map((part, i) => {
@@ -8,7 +8,7 @@ function inline(text: string, keyBase: string): ReactNode[] {
     if (part.startsWith("**") && part.endsWith("**")) return <strong key={key}>{part.slice(2, -2)}</strong>;
     if (part.startsWith("`") && part.endsWith("`")) return <code key={key}>{part.slice(1, -1)}</code>;
     if (part.startsWith("*") && part.endsWith("*") && part.length > 2) return <em key={key}>{part.slice(1, -1)}</em>;
-    const link = part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+    const link = i % 2 === 1 && part.match(/^\[([^\]]+)\]\(([^)]+)\)$/);
     if (link) {
       return (
         <a key={key} href={link[2]} target="_blank" rel="noopener noreferrer">
@@ -51,6 +51,7 @@ export function renderMarkdown(text: string): ReactNode {
         items.push(m[1]!);
         i++;
       }
+      // biome-ignore lint/suspicious/noArrayIndexKey: rebuilt from the same string every render, never reordered
       const list = items.map((item, j) => <li key={j}>{inline(item, `${key}-${j}`)}</li>);
       blocks.push(ordered ? <ol key={key++}>{list}</ol> : <ul key={key++}>{list}</ul>);
       continue;
@@ -60,12 +61,18 @@ export function renderMarkdown(text: string): ReactNode {
       continue;
     }
     const para: string[] = [];
-    while (i < lines.length && lines[i]!.trim() && !lines[i]!.startsWith("```") && !/^\s*(?:[-*•]|\d+[.)])\s+/.test(lines[i]!)) {
+    while (
+      i < lines.length &&
+      lines[i]!.trim() &&
+      !lines[i]!.startsWith("```") &&
+      !/^\s*(?:[-*•]|\d+[.)])\s+/.test(lines[i]!)
+    ) {
       para.push(lines[i++]!);
     }
     blocks.push(
       <p key={key++}>
         {para.map((l, j) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: rebuilt from the same string every render, never reordered
           <Fragment key={j}>
             {j > 0 && <br />}
             {inline(l, `${key}-${j}`)}

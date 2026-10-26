@@ -15,6 +15,7 @@ export function SitepilotProvider({ children, pilot: given, ...options }: Sitepi
   const latest = useRef(options);
   latest.current = options;
   const { transport, plugins, prompt, systemPrompt } = options;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new pilot is a new conversation, so only identity-bearing inputs rebuild it; tools/user/context are read through the ref every round
   const pilot = useMemo(
     () =>
       given ??
@@ -24,9 +25,6 @@ export function SitepilotProvider({ children, pilot: given, ...options }: Sitepi
         user: () => read(latest.current.user),
         context: () => read(latest.current.context),
       }),
-    // A new pilot means a new conversation, so only identity-bearing inputs rebuild it;
-    // tools/user/context are read through the ref every round instead.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [given, transport, plugins, prompt, systemPrompt],
   );
   return <PilotContext.Provider value={pilot}>{children}</PilotContext.Provider>;
@@ -43,7 +41,8 @@ export function usePilotState(): PilotState {
   return useSyncExternalStore(pilot.subscribe, pilot.getState, pilot.getState);
 }
 
-export function useSitepilot(): PilotState & Pick<Pilot, "send" | "stop" | "reset" | "setTools" | "clearHighlight" | "getHistory" | "loadHistory"> {
+export function useSitepilot(): PilotState &
+  Pick<Pilot, "send" | "stop" | "reset" | "setTools" | "clearHighlight" | "getHistory" | "loadHistory"> {
   const pilot = usePilot();
   const state = usePilotState();
   return {

@@ -15,17 +15,31 @@
       "require": "./dist/index.cjs"
     }
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc -p tsconfig.json"
   },
   "peerDependencies": {
-    "@sitepilot/core": "workspace:*"
+    "@sitepilot/core": "workspace:^"
   },
   "devDependencies": {
     "@sitepilot/core": "workspace:*"
   },
-  "repository": { "type": "git", "url": "https://github.com/OhanaeL/sitepilot", "directory": "packages/computer" },
-  "keywords": ["ai", "agent", "computer-use", "screenshot", "copilot", "privacy"]
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/OhanaeL/sitepilot",
+    "directory": "packages/computer"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "computer-use",
+    "screenshot",
+    "copilot",
+    "privacy"
+  ]
 }

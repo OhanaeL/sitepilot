@@ -10,11 +10,13 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
+      "@sitepilot/source": "./src/index.ts",
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
     "./prompt": {
+      "@sitepilot/source": "./src/prompt.ts",
       "types": "./dist/prompt.d.ts",
       "import": "./dist/prompt.js",
       "require": "./dist/prompt.cjs"

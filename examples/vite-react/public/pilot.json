@@ -1,10 +1,18 @@
 {
   "elements": [
     { "selector": "nav button", "label": "{text} nav link" },
-    { "selector": "header input", "label": "Search projects field", "hint": "Filters the cards live as the user types." }
+    {
+      "selector": "header input",
+      "label": "Search projects field",
+      "hint": "Filters the cards live as the user types."
+    }
   ],
   "areas": [
-    { "selector": ".detail", "topic": "project-details", "description": "The details panel of one project: owner, status, and a pause/resume toggle." }
+    {
+      "selector": ".detail",
+      "topic": "project-details",
+      "description": "The details panel of one project: owner, status, and a pause/resume toggle."
+    }
   ],
   "hints": {
     "Settings nav link": "Account settings: display name, email, password."

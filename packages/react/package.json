@@ -15,13 +15,16 @@
       "require": "./dist/index.cjs"
     }
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "scripts": {
     "build": "tsup",
     "typecheck": "tsc -p tsconfig.json"
   },
   "peerDependencies": {
-    "@sitepilot/core": "workspace:*",
+    "@sitepilot/core": "workspace:^",
     "react": ">=18"
   },
   "devDependencies": {
@@ -36,5 +39,11 @@
     "url": "https://github.com/OhanaeL/sitepilot",
     "directory": "packages/react"
   },
-  "keywords": ["ai", "agent", "copilot", "react", "chat-widget"]
+  "keywords": [
+    "ai",
+    "agent",
+    "copilot",
+    "react",
+    "chat-widget"
+  ]
 }

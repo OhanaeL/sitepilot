@@ -28,7 +28,9 @@ describe("renderLabel", () => {
   test("fills placeholders and collapses whitespace", () => {
     document.body.innerHTML = `<a href="/x" title="T" data-id="42">  Go   <b class="t">deep</b></a>`;
     const a = document.querySelector("a")!;
-    expect(renderLabel("{text} ({href}) [{attr:data-id}] <{text:.t}> {title} {nope}", a)).toBe("Go deep (/x) [42] <deep> T");
+    expect(renderLabel("{text} ({href}) [{attr:data-id}] <{text:.t}> {title} {nope}", a)).toBe(
+      "Go deep (/x) [42] <deep> T",
+    );
   });
 });
 
@@ -121,7 +123,12 @@ describe("pilot manifest option", () => {
   test("explicit systemPrompt and hints layer over the manifest's", async () => {
     document.body.innerHTML = `<input id="search"><button class="btn-new"></button>`;
     const transport = scripted([{ content: "ok" }]);
-    await createPilot({ transport, manifest, systemPrompt: "MINE", hints: { "Create project button": "Pro only." } }).send("hi");
+    await createPilot({
+      transport,
+      manifest,
+      systemPrompt: "MINE",
+      hints: { "Create project button": "Pro only." },
+    }).send("hi");
     const sys = transport.requests[0]!.messages[0]!.content as string;
     expect(sys).toMatch(/^MINE/);
     expect(sys).toContain("Search field — Filters live.");

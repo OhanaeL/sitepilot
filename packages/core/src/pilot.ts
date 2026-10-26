@@ -3,7 +3,14 @@ import { ACTION_TOOLS, resolveBuiltinTools, type ActionToolName, type BuiltinToo
 import { scanAmbient, scanContext, type ScanOptions } from "./dom";
 import { showSeen } from "./seen";
 import { getEvents, installEventsBuffer } from "./events";
-import { buildSystemPrompt, DEFAULT_MAX_EMBEDDED, type Hints, type PromptContext, type PromptOptions, type ScreenContext } from "./prompt";
+import {
+  buildSystemPrompt,
+  DEFAULT_MAX_EMBEDDED,
+  type Hints,
+  type PromptContext,
+  type PromptOptions,
+  type ScreenContext,
+} from "./prompt";
 import { getManifest, loadManifest, setManifest, type PilotManifest } from "./manifest";
 import { mergeStrings, type PilotStrings, type PilotStringsOverride } from "./strings";
 import {
@@ -15,7 +22,7 @@ import {
   type ToolCall,
   type ToolContext,
 } from "./tools";
-import type { ChatMessage, Transport } from "./transport";
+import type { ChatMessage, CompletionRequest, Transport } from "./transport";
 
 type Getter<T> = T | (() => T);
 
@@ -151,7 +158,10 @@ export function createPilot(options: PilotOptions): Pilot {
   const trim = options.history?.trim ?? defaultTrim;
   const getPath = options.getPath ?? (() => (typeof location !== "undefined" ? location.pathname : "/"));
   const plugins = options.plugins ?? [];
-  const fixedTools: readonly PilotTool[] = [...resolveBuiltinTools(options.builtinTools), ...plugins.flatMap((p) => p.tools ?? [])];
+  const fixedTools: readonly PilotTool[] = [
+    ...resolveBuiltinTools(options.builtinTools),
+    ...plugins.flatMap((p) => p.tools ?? []),
+  ];
   const tools = (): readonly PilotTool[] => [...fixedTools, ...(resolve(options.tools) ?? [])];
   const briefs = plugins.map((p) => p.brief).filter((b): b is string => !!b);
   const strings = mergeStrings(options.strings);
@@ -181,7 +191,11 @@ export function createPilot(options: PilotOptions): Pilot {
   let state: PilotState = {
     messages: [],
     status: "idle",
-    enabledTools: options.enabledTools ?? tools().filter((t) => t.kind === "action").map((t) => t.spec.function.name),
+    enabledTools:
+      options.enabledTools ??
+      tools()
+        .filter((t) => t.kind === "action")
+        .map((t) => t.spec.function.name),
     activeHighlight: null,
     error: null,
   };
@@ -197,9 +211,8 @@ export function createPilot(options: PilotOptions): Pilot {
     state = { ...state, ...patch };
     for (const l of listeners) l();
   };
-  let answering: string | undefined;
-  const push = (role: PilotMessage["role"], content: string): void =>
-    set({ messages: [...state.messages, { id: newId(), role, content, ...(role !== "user" && answering && { by: answering }) }] });
+  const push = (role: PilotMessage["role"], content: string, by?: string): void =>
+    set({ messages: [...state.messages, { id: newId(), role, content, ...(by && { by }) }] });
   const record = (entry: HistoryEntry): void => {
     history.push(entry);
     options.history?.onChange?.(history.map(({ ephemeral: _, ...m }) => m as ChatMessage));
@@ -220,7 +233,7 @@ export function createPilot(options: PilotOptions): Pilot {
     enabledTools: [...state.enabledTools],
   });
 
-  const toolContext: ToolContext = {
+  const toolContext = (by: string | undefined): ToolContext => ({
     screen: collectScreen,
     scan: options.scan,
     strings,
@@ -233,26 +246,99 @@ export function createPilot(options: PilotOptions): Pilot {
     get user() {
       return resolve(options.user) ?? null;
     },
-    activity: (text) => push("activity", text),
+    activity: (text) => push("activity", text, by),
     enqueueUserTurn: (text) => {
       if (state.status === "idle") void send(text);
       else queued = text;
     },
     setHighlight: (key) => set({ activeHighlight: key ? { key } : null }),
-  };
+  });
 
-  async function executeTool(call: ToolCall): Promise<{ content: string; attachments: ContentPart[] }> {
+  async function executeTool(
+    call: ToolCall,
+    by: string | undefined,
+  ): Promise<{ content: string; attachments: ContentPart[] }> {
     const tool = tools().find((t) => t.spec.function.name === call.name);
     if (!tool) return { content: strings.unknownTool(call.name), attachments: [] };
-    if (tool.kind === "utility" && state.enabledTools.length === 0) return { content: strings.screenOff, attachments: [] };
+    if (tool.kind === "utility" && state.enabledTools.length === 0)
+      return { content: strings.screenOff, attachments: [] };
     if (tool.kind === "action" && !state.enabledTools.includes(call.name)) {
       return { content: strings.toolNotEnabled(call.name), attachments: [] };
     }
     try {
-      const out = await tool.execute(call.args, toolContext);
-      return typeof out === "string" ? { content: out, attachments: [] } : { content: out.content, attachments: out.attachments ?? [] };
+      const out = await tool.execute(call.args, toolContext(by));
+      return typeof out === "string"
+        ? { content: out, attachments: [] }
+        : { content: out.content, attachments: out.attachments ?? [] };
     } catch (err) {
-      return { content: strings.toolThrew(call.name, err instanceof Error ? err.message : String(err)), attachments: [] };
+      return {
+        content: strings.toolThrew(call.name, err instanceof Error ? err.message : String(err)),
+        attachments: [],
+      };
+    }
+  }
+
+  function requestFor(): CompletionRequest {
+    const ctx = promptContext();
+    const serverMode = options.prompt === "server";
+    const system: ChatMessage[] = serverMode
+      ? []
+      : [{ role: "system", content: buildSystemPrompt(ctx, promptOptions()) }];
+    const userId = typeof ctx.user?.["id"] === "string" ? ctx.user["id"] : undefined;
+    return {
+      messages: [...system, ...trim(history, maxHistory)],
+      tools: buildToolSpecs(tools(), state.enabledTools),
+      ...(userId && { userId }),
+      ...(serverMode && { context: ctx }),
+    };
+  }
+
+  async function runTools(calls: ToolCall[], signal: AbortSignal, by: string | undefined): Promise<void> {
+    const attachments: ContentPart[] = [];
+    for (const call of calls) {
+      const out = await executeTool(call, by);
+      if (signal.aborted) return;
+      record({ role: "tool", tool_call_id: call.id, content: out.content });
+      attachments.push(...out.attachments);
+    }
+    if (attachments.length) {
+      record({
+        role: "user",
+        content: [{ type: "text", text: strings.attachmentsNote }, ...attachments],
+        ephemeral: true,
+      });
+    }
+  }
+
+  async function loop(signal: AbortSignal): Promise<"done" | "capped"> {
+    for (let round = 0; round < maxRounds; round++) {
+      const reply = await options.transport.complete(requestFor(), { signal });
+      if (signal.aborted) return "done";
+      record({
+        role: "assistant",
+        content: reply.content || null,
+        ...(reply.wireToolCalls.length && { tool_calls: reply.wireToolCalls }),
+      });
+      if (reply.content) push("assistant", reply.content, reply.model);
+      if (reply.toolCalls.length === 0) return "done";
+
+      set({ status: "acting" });
+      await runTools(reply.toolCalls, signal, reply.model);
+      if (signal.aborted) return "done";
+      set({ status: "thinking" });
+    }
+    return "capped";
+  }
+
+  // A stopped run can leave tool calls unanswered, and the API rejects a
+  // history where any tool call lacks a result right after it.
+  function answerOpenCalls(): void {
+    const last = history.map((m) => m.role).lastIndexOf("assistant");
+    const open = history[last];
+    if (open?.role !== "assistant" || !open.tool_calls) return;
+    const answered = new Set(history.slice(last + 1).map((m) => m.role === "tool" && m.tool_call_id));
+    for (const call of open.tool_calls) {
+      if (!answered.has(call.id)) record({ role: "tool", tool_call_id: call.id, content: strings.stopped });
     }
   }
 
@@ -265,64 +351,26 @@ export function createPilot(options: PilotOptions): Pilot {
     }
 
     await ready;
-    abort = new AbortController();
-    const { signal } = abort;
+    const run = new AbortController();
+    abort = run;
     push("user", trimmed);
     history = stripEphemeralMedia(history, strings.screenshotOmitted);
+    answerOpenCalls();
     record({ role: "user", content: trimmed });
     set({ status: "thinking", error: manifestError });
 
     try {
-      let round = 0;
-      for (; round < maxRounds; round++) {
-        const ctx = promptContext();
-        const serverMode = options.prompt === "server";
-        const system: ChatMessage[] = serverMode ? [] : [{ role: "system", content: buildSystemPrompt(ctx, promptOptions()) }];
-        const userId = typeof ctx.user?.["id"] === "string" ? ctx.user["id"] : undefined;
-        const reply = await options.transport.complete(
-          {
-            messages: [...system, ...trim(history, maxHistory)],
-            tools: buildToolSpecs(tools(), state.enabledTools),
-            ...(userId && { userId }),
-            ...(serverMode && { context: ctx }),
-          },
-          { signal },
-        );
-        if (signal.aborted) return;
-        answering = reply.model;
-
-        record({
-          role: "assistant",
-          content: reply.content || null,
-          ...(reply.wireToolCalls.length && { tool_calls: reply.wireToolCalls }),
-        });
-        if (reply.content) push("assistant", reply.content);
-        if (reply.toolCalls.length === 0) break;
-
-        set({ status: "acting" });
-        const attachments: ContentPart[] = [];
-        for (const call of reply.toolCalls) {
-          const out = await executeTool(call);
-          record({ role: "tool", tool_call_id: call.id, content: out.content });
-          attachments.push(...out.attachments);
-          if (signal.aborted) return;
-        }
-        if (attachments.length) {
-          record({ role: "user", content: [{ type: "text", text: strings.attachmentsNote }, ...attachments], ephemeral: true });
-        }
-        answering = undefined;
-        set({ status: "thinking" });
-      }
-      if (round === maxRounds) push("activity", strings.activity.stoppedAfter(maxRounds));
+      if ((await loop(run.signal)) === "capped") push("activity", strings.activity.stoppedAfter(maxRounds));
     } catch (err) {
-      if (!signal.aborted) set({ error: err instanceof Error ? err.message : String(err) });
+      if (!run.signal.aborted) set({ error: err instanceof Error ? err.message : String(err) });
     } finally {
-      abort = null;
-      answering = undefined;
-      set({ status: "idle" });
-      const next = queued;
-      queued = null;
-      if (next) void send(next);
+      if (abort === null || abort === run) {
+        abort = null;
+        set({ status: "idle" });
+        const next = queued;
+        queued = null;
+        if (next) void send(next);
+      }
     }
   }
 
@@ -363,7 +411,8 @@ export function createPilot(options: PilotOptions): Pilot {
     showSeen: () =>
       showSeen({
         scan: options.scan,
-        items: () => state.enabledTools.length > 0,
+        items: () =>
+          state.enabledTools.length > 0 && tools().some((t) => t.spec.function.name === "get_screen_elements"),
         embedded: options.promptOptions?.maxEmbeddedElements ?? DEFAULT_MAX_EMBEDDED,
       }),
     strings,

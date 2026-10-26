@@ -21,9 +21,7 @@ export interface Viewport {
   h: number;
 }
 
-export interface FrameRenderer {
-  (elements: FrameElement[], viewport: Viewport): Promise<string | null>;
-}
+export type FrameRenderer = (elements: FrameElement[], viewport: Viewport) => Promise<string | null>;
 
 export type ElementRenderer = (el: HTMLElement) => Promise<CanvasImageSource>;
 
@@ -33,7 +31,8 @@ export function viewport(): Viewport {
   return { w: window.innerWidth, h: window.innerHeight };
 }
 
-const norm = (px: number, size: number): number => Math.max(0, Math.min(COORD_MAX, Math.round((px / size) * (COORD_MAX + 1))));
+const norm = (px: number, size: number): number =>
+  Math.max(0, Math.min(COORD_MAX, Math.round((px / size) * (COORD_MAX + 1))));
 
 export function toNormRect(r: DOMRect, vp: Viewport): NormRect {
   const x = norm(r.left, vp.w);
@@ -72,7 +71,7 @@ export interface SchematicOptions {
   renderElement?: ElementRenderer;
 }
 
-function valueOf(e: FrameElement): string {
+function fieldValueOf(e: FrameElement): string {
   const i = e.description.indexOf(": “");
   return i === -1 ? "" : e.description.slice(i + 3).replace(/”$/, "");
 }
@@ -147,7 +146,7 @@ export function schematicRenderer(opts: SchematicOptions = {}): FrameRenderer {
       ctx.fillStyle = TIER_COLOR[e.tier];
       ctx.fillText(labelInside ? label : fitText(ctx, e.key, canvas.width - lx), lx, ly);
 
-      const value = painted ? "" : valueOf(e);
+      const value = painted ? "" : fieldValueOf(e);
       if (value && labelInside && h >= font * 2 + 8) {
         ctx.font = `${font}px system-ui, sans-serif`;
         ctx.fillStyle = "#374151";

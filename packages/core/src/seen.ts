@@ -40,11 +40,25 @@ const rectOf = (r: DOMRect): Rect => ({ left: r.left, top: r.top, right: r.right
 const viewport = (): Rect => ({ left: 0, top: 0, right: innerWidth, bottom: innerHeight });
 
 function intersect(a: Rect, b: Rect): Rect | null {
-  const r = { left: Math.max(a.left, b.left), top: Math.max(a.top, b.top), right: Math.min(a.right, b.right), bottom: Math.min(a.bottom, b.bottom) };
+  const r = {
+    left: Math.max(a.left, b.left),
+    top: Math.max(a.top, b.top),
+    right: Math.min(a.right, b.right),
+    bottom: Math.min(a.bottom, b.bottom),
+  };
   return r.right > r.left && r.bottom > r.top ? r : null;
 }
 
 const CLIPS = /(hidden|clip|scroll|auto)/;
+
+// While <html> has visible overflow, <body>'s overflow applies to the viewport,
+// so <body> itself clips nothing.
+const overflows = (s: CSSStyleDeclaration) => CLIPS.test(`${s.overflowX} ${s.overflowY}`);
+
+function clips(p: HTMLElement, s: CSSStyleDeclaration): boolean {
+  if (!overflows(s)) return false;
+  return p !== document.body || overflows(getComputedStyle(document.documentElement));
+}
 
 function clipAndOpacity(el: HTMLElement, box: Rect): { clip: Rect | null; transparent: boolean } {
   let clip = intersect(box, viewport());
@@ -53,7 +67,7 @@ function clipAndOpacity(el: HTMLElement, box: Rect): { clip: Rect | null; transp
   for (let p = el.parentElement; p && p !== document.documentElement; p = p.parentElement) {
     const s = getComputedStyle(p);
     if (s.opacity === "0") transparent = true;
-    if (clip && CLIPS.test(`${s.overflowX} ${s.overflowY}`)) clip = intersect(clip, rectOf(p.getBoundingClientRect()));
+    if (clip && clips(p, s)) clip = intersect(clip, rectOf(p.getBoundingClientRect()));
   }
   return { clip, transparent };
 }
@@ -71,31 +85,50 @@ function pinned(hit: Element, el: HTMLElement): boolean {
   return false;
 }
 
+function samples(area: Rect): Array<[x: number, y: number]> {
+  return Array.from({ length: SAMPLE_ROWS * SAMPLE_COLS }, (_, i) => [
+    area.left + (((i % SAMPLE_COLS) + 0.5) / SAMPLE_COLS) * (area.right - area.left),
+    area.top + ((Math.floor(i / SAMPLE_COLS) + 0.5) / SAMPLE_ROWS) * (area.bottom - area.top),
+  ]);
+}
+
+const isOwn = (hit: Element, el: HTMLElement) => el.contains(hit) || hit.contains(el);
+
 function sightingIn(el: HTMLElement, clip: Rect): Sighting {
   let onlyPinned = true;
-  for (let r = 0; r < SAMPLE_ROWS; r++) {
-    for (let c = 0; c < SAMPLE_COLS; c++) {
-      const hit = topmost(
-        clip.left + ((c + 0.5) / SAMPLE_COLS) * (clip.right - clip.left),
-        clip.top + ((r + 0.5) / SAMPLE_ROWS) * (clip.bottom - clip.top),
-      );
-      if (hit && (el.contains(hit) || hit.contains(el))) return "visible";
-      if (!hit || !pinned(hit, el)) onlyPinned = false;
-    }
+  for (const [x, y] of samples(clip)) {
+    const hit = topmost(x, y);
+    if (hit && isOwn(hit, el)) return "visible";
+    if (!hit || !pinned(hit, el)) onlyPinned = false;
   }
   return onlyPinned ? "offscreen" : "hidden";
 }
 
+function underPinned(el: HTMLElement, area: Rect): boolean {
+  return samples(area).every(([x, y]) => {
+    const hit = topmost(x, y);
+    return !!hit && !isOwn(hit, el) && pinned(hit, el);
+  });
+}
+
 /** Every element the model is sent (same keys and cap as the prompt), and whether the user can see it. */
-export function locateSeen(opts: { scan?: ScanOptions | undefined; items?: boolean; embedded?: number | undefined } = {}): SeenElement[] {
+export function locateSeen(
+  opts: { scan?: ScanOptions | undefined; items?: boolean; embedded?: number | undefined } = {},
+): SeenElement[] {
   const tiers = scanTiers(opts.scan);
   const ambient = tiers.ambient.slice(0, opts.embedded);
   const list = opts.items === false ? ambient : [...ambient, ...tiers.item];
   return list.map(({ key, tier, el }) => {
     const box = rectOf(el.getBoundingClientRect());
+    const inView = intersect(box, viewport());
     const { clip, transparent } = clipAndOpacity(el, box);
-    const sighting: Sighting =
-      !intersect(box, viewport()) ? "offscreen" : clip && !transparent ? sightingIn(el, clip) : "hidden";
+    const sighting: Sighting = !inView
+      ? "offscreen"
+      : clip && !transparent
+        ? sightingIn(el, clip)
+        : underPinned(el, inView)
+          ? "offscreen"
+          : "hidden";
     return { key, tier, el, sighting, box };
   });
 }
@@ -104,7 +137,11 @@ const OUTLINE = ["outline-style", "outline-width", "outline-color", "outline-off
 type Saved = Array<[value: string, priority: string]>;
 
 function outline(el: HTMLElement, tier: Tier, saved: Map<HTMLElement, Saved>): void {
-  if (!saved.has(el)) saved.set(el, OUTLINE.map((p) => [el.style.getPropertyValue(p), el.style.getPropertyPriority(p)]));
+  if (!saved.has(el))
+    saved.set(
+      el,
+      OUTLINE.map((p) => [el.style.getPropertyValue(p), el.style.getPropertyPriority(p)]),
+    );
   const want = [tier === "ambient" ? "solid" : "dashed", "2px", ACCENT, "2px"];
   OUTLINE.forEach((p, i) => {
     if (el.style.getPropertyValue(p) !== want[i]) el.style.setProperty(p, want[i]!, "important");
@@ -135,13 +172,17 @@ function hatch(box: Rect): HTMLElement {
   return n;
 }
 
+let hideCurrent: (() => void) | null = null;
+
 /**
  * Outline every element the model is sent, on the element itself so the page's
  * own layers cover it; hatched red on top where the model sees what the user
- * can't. Returns a function that removes it.
+ * can't. Returns a function that removes it. One view at a time: a new call
+ * removes the previous one.
  */
 export function showSeen(opts: ShowSeenOptions = {}): () => void {
   if (typeof document === "undefined") return () => {};
+  hideCurrent?.();
   const root = document.createElement("div");
   root.setAttribute(ROOT_ATTR, "");
   root.setAttribute("aria-hidden", "true");
@@ -165,21 +206,21 @@ export function showSeen(opts: ShowSeenOptions = {}): () => void {
       saved.delete(el);
     }
     root.replaceChildren(...seen.filter((e) => e.sighting === "hidden").map((e) => hatch(e.box)));
+    observer.takeRecords();
   };
   const schedule = () => {
     pending ??= setTimeout(draw, REFRESH_MS);
   };
-  const ownStyle = (m: MutationRecord) => m.attributeName === "style" && saved.has(m.target as HTMLElement);
-  const observer = new MutationObserver((records) => {
-    if (!records.every(ownStyle)) schedule();
-  });
+  const observer = new MutationObserver(schedule);
 
   window.addEventListener("scroll", schedule, { capture: true, passive: true });
   window.addEventListener("resize", schedule);
   observer.observe(document.body, { subtree: true, childList: true, attributes: true, characterData: true });
   draw();
 
-  return () => {
+  const hide = () => {
+    if (hideCurrent !== hide) return;
+    hideCurrent = null;
     if (pending) clearTimeout(pending);
     window.removeEventListener("scroll", schedule, { capture: true });
     window.removeEventListener("resize", schedule);
@@ -188,4 +229,6 @@ export function showSeen(opts: ShowSeenOptions = {}): () => void {
     saved.clear();
     root.remove();
   };
+  hideCurrent = hide;
+  return hide;
 }
