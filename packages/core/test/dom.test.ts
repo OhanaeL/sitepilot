@@ -83,6 +83,14 @@ describe("resolveKey", () => {
     expect(resolveKey(item!.key)?.id).toBe("i");
   });
 
+  test("an ordinal never reuses a label that is already on the page", () => {
+    document.body.innerHTML = `
+      <b id="a" data-pilot="Save #2"></b><b id="b" data-pilot="Save"></b><b id="c" data-pilot="Save"></b>`;
+    expect(scanAmbient().map((e) => e.key)).toEqual(["Save #2", "Save", "Save #3"]);
+    expect(resolveKey("Save #2")?.id).toBe("a");
+    expect(resolveKey("Save #3")?.id).toBe("c");
+  });
+
   test("paraphrased key resolves when unique, not when ambiguous or tiny", () => {
     document.body.innerHTML = `
       <b id="cp" data-pilot="Create Project button — opens the dialog"></b>

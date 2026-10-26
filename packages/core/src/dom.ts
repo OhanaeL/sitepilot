@@ -102,11 +102,21 @@ function candidates(root: ParentNode, tiers: Tier[]): Candidate[] {
 // Ordinals are counted over one shared map across tiers: the model sees a
 // single key namespace, so "X" in both tiers must become "X" and "X #2".
 function withKeys(list: Candidate[]): Array<Candidate & { key: string }> {
+  const taken = new Set(list.map((c) => c.label));
+  const firsts = new Set<string>();
   const counts = new Map<string, number>();
   return list.map((c) => {
-    const n = (counts.get(c.label) ?? 0) + 1;
+    if (!firsts.has(c.label)) {
+      firsts.add(c.label);
+      return { ...c, key: c.label };
+    }
+    let n = counts.get(c.label) ?? 1;
+    let key: string;
+    do key = `${c.label} #${++n}`;
+    while (taken.has(key));
     counts.set(c.label, n);
-    return { ...c, key: n === 1 ? c.label : `${c.label} #${n}` };
+    taken.add(key);
+    return { ...c, key };
   });
 }
 
