@@ -21,9 +21,7 @@ export interface Viewport {
   h: number;
 }
 
-export interface FrameRenderer {
-  (elements: FrameElement[], viewport: Viewport): Promise<string | null>;
-}
+export type FrameRenderer = (elements: FrameElement[], viewport: Viewport) => Promise<string | null>
 
 export type ElementRenderer = (el: HTMLElement) => Promise<CanvasImageSource>;
 
@@ -72,7 +70,7 @@ export interface SchematicOptions {
   renderElement?: ElementRenderer;
 }
 
-function valueOf(e: FrameElement): string {
+function fieldValueOf(e: FrameElement): string {
   const i = e.description.indexOf(": “");
   return i === -1 ? "" : e.description.slice(i + 3).replace(/”$/, "");
 }
@@ -147,7 +145,7 @@ export function schematicRenderer(opts: SchematicOptions = {}): FrameRenderer {
       ctx.fillStyle = TIER_COLOR[e.tier];
       ctx.fillText(labelInside ? label : fitText(ctx, e.key, canvas.width - lx), lx, ly);
 
-      const value = painted ? "" : valueOf(e);
+      const value = painted ? "" : fieldValueOf(e);
       if (value && labelInside && h >= font * 2 + 8) {
         ctx.font = `${font}px system-ui, sans-serif`;
         ctx.fillStyle = "#374151";

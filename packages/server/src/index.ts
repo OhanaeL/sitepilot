@@ -365,7 +365,9 @@ export function toNodeListener(handler: (req: Request) => Promise<Response>) {
       new Request(`http://${host}${req.url ?? "/"}`, { method: req.method ?? "POST", headers, ...(body && { body }) }),
     );
     res.statusCode = response.status;
-    response.headers.forEach((value, key) => res.setHeader(key, value));
+    response.headers.forEach((value, key) => {
+      res.setHeader(key, value);
+    });
     res.end(await response.text());
   };
 }

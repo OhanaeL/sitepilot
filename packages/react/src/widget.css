@@ -24,7 +24,7 @@
 .sp-icon:hover{background:var(--sp-bubble);color:var(--sp-fg)}
 .sp-icon svg{width:16px;height:16px}
 .sp-icon.is-on{background:color-mix(in srgb,var(--sp-accent) 12%,transparent);color:var(--sp-accent)}
-.sp-tools{display:flex;flex-wrap:wrap;gap:6px;padding:10px 14px 0}
+.sp-tools{border:0;margin:0;min-width:0;display:flex;flex-wrap:wrap;gap:6px;padding:10px 14px 0}
 .sp-chip{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:999px;border:1px solid var(--sp-border);background:transparent;color:var(--sp-muted);font:inherit;font-size:12px;cursor:pointer;line-height:1.4}
 .sp-chip.is-on{border-color:var(--sp-accent);color:var(--sp-accent);background:color-mix(in srgb,var(--sp-accent) 10%,transparent)}
 .sp-chip svg{width:12px;height:12px}

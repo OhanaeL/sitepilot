@@ -97,6 +97,6 @@ export function buildSystemPrompt(ctx: PromptContext, opts: PromptOptions = {}):
     user,
     ctx.extra ?? "",
   ]
-    .filter((s) => s && s.trim())
+    .filter((s) => s?.trim())
     .join("\n\n");
 }

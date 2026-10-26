@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { renderToStaticMarkup } from "react-dom/server";
 import { renderMarkdown } from "../src/markdown";
 
-const html = (s: string) => renderToStaticMarkup(<>{renderMarkdown(s)}</>);
+const html = (s: string) => renderToStaticMarkup(renderMarkdown(s));
 
 describe("renderMarkdown", () => {
   test("paragraphs, bold, italic, code, links", () => {

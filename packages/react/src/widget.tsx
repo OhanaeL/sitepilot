@@ -109,6 +109,7 @@ export function SitepilotWidget({
 
   useEffect(ensureStyles, []);
   useEffect(() => (seeing ? pilot.showSeen() : undefined), [seeing, pilot]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: scroll to the bottom whenever a message or the typing indicator appears
   useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight });
   }, [messages, status]);
@@ -177,7 +178,7 @@ export function SitepilotWidget({
           </div>
 
           {showToolToggles && actions.length > 0 && (
-            <div className="sp-tools" role="group" aria-label="Allowed actions">
+            <fieldset className="sp-tools" aria-label="Allowed actions">
               {actions.map((t) => {
                 const name = t.spec.function.name;
                 const on = enabledTools.includes(name);
@@ -194,7 +195,7 @@ export function SitepilotWidget({
                   </button>
                 );
               })}
-            </div>
+            </fieldset>
           )}
 
           <div className="sp-log" ref={logRef}>
@@ -220,7 +221,7 @@ export function SitepilotWidget({
               </Fragment>
             ))}
             {busy && (
-              <div className="sp-typing" aria-label={status === "thinking" ? "Thinking" : "Working"}>
+              <div className="sp-typing" role="status" aria-label={status === "thinking" ? "Thinking" : "Working"}>
                 <span className="sp-dot" />
                 <span className="sp-dot" />
                 <span className="sp-dot" />

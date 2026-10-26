@@ -51,6 +51,7 @@ export function renderMarkdown(text: string): ReactNode {
         items.push(m[1]!);
         i++;
       }
+      // biome-ignore lint/suspicious/noArrayIndexKey: rebuilt from the same string every render, never reordered
       const list = items.map((item, j) => <li key={j}>{inline(item, `${key}-${j}`)}</li>);
       blocks.push(ordered ? <ol key={key++}>{list}</ol> : <ul key={key++}>{list}</ul>);
       continue;
@@ -66,6 +67,7 @@ export function renderMarkdown(text: string): ReactNode {
     blocks.push(
       <p key={key++}>
         {para.map((l, j) => (
+          // biome-ignore lint/suspicious/noArrayIndexKey: rebuilt from the same string every render, never reordered
           <Fragment key={j}>
             {j > 0 && <br />}
             {inline(l, `${key}-${j}`)}

@@ -1,5 +1,5 @@
 import { beginAgentAction, endAgentAction, type PilotPlugin, type PilotTool, type ToolOutput } from "@sitepilot/core";
-import { COORD_MAX, MAX_ACTIONS, parseBatch, REJECTED, SCHEMA, type Action } from "./batch";
+import { COORD_MAX, MAX_ACTIONS, parseBatch, REJECTED, SCHEMA, type Action, type Batch } from "./batch";
 import {
   elementAt,
   frameElements,
@@ -139,7 +139,7 @@ export function computerPlugin(options: ComputerPluginOptions = {}): PilotPlugin
       },
     },
     async execute(args, ctx): Promise<ToolOutput> {
-      let batch;
+      let batch: Batch;
       try {
         batch = parseBatch(args);
       } catch (err) {

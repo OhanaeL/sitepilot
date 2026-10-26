@@ -106,10 +106,10 @@ export function App() {
         <aside>
           <div className="brand">Acme</div>
           <nav>
-            <button className={tab === "projects" ? "on" : ""} onClick={() => setTab("projects")}>
+            <button type="button" className={tab === "projects" ? "on" : ""} onClick={() => setTab("projects")}>
               Projects
             </button>
-            <button className={tab === "settings" ? "on" : ""} onClick={() => setTab("settings")}>
+            <button type="button" className={tab === "settings" ? "on" : ""} onClick={() => setTab("settings")}>
               Settings
             </button>
           </nav>
