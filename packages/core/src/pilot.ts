@@ -15,7 +15,7 @@ import {
   type ToolCall,
   type ToolContext,
 } from "./tools";
-import type { ChatMessage, Transport } from "./transport";
+import type { ChatMessage, CompletionRequest, Transport } from "./transport";
 
 type Getter<T> = T | (() => T);
 
@@ -197,9 +197,9 @@ export function createPilot(options: PilotOptions): Pilot {
     state = { ...state, ...patch };
     for (const l of listeners) l();
   };
-  let answering: string | undefined;
-  const push = (role: PilotMessage["role"], content: string): void =>
-    set({ messages: [...state.messages, { id: newId(), role, content, ...(role !== "user" && answering && { by: answering }) }] });
+  let toolsBy: string | undefined;
+  const push = (role: PilotMessage["role"], content: string, by?: string): void =>
+    set({ messages: [...state.messages, { id: newId(), role, content, ...(by && { by }) }] });
   const record = (entry: HistoryEntry): void => {
     history.push(entry);
     options.history?.onChange?.(history.map(({ ephemeral: _, ...m }) => m as ChatMessage));
@@ -233,7 +233,7 @@ export function createPilot(options: PilotOptions): Pilot {
     get user() {
       return resolve(options.user) ?? null;
     },
-    activity: (text) => push("activity", text),
+    activity: (text) => push("activity", text, toolsBy),
     enqueueUserTurn: (text) => {
       if (state.status === "idle") void send(text);
       else queued = text;
@@ -256,6 +256,57 @@ export function createPilot(options: PilotOptions): Pilot {
     }
   }
 
+  function requestFor(): CompletionRequest {
+    const ctx = promptContext();
+    const serverMode = options.prompt === "server";
+    const system: ChatMessage[] = serverMode ? [] : [{ role: "system", content: buildSystemPrompt(ctx, promptOptions()) }];
+    const userId = typeof ctx.user?.["id"] === "string" ? ctx.user["id"] : undefined;
+    return {
+      messages: [...system, ...trim(history, maxHistory)],
+      tools: buildToolSpecs(tools(), state.enabledTools),
+      ...(userId && { userId }),
+      ...(serverMode && { context: ctx }),
+    };
+  }
+
+  async function runTools(calls: ToolCall[], signal: AbortSignal, by: string | undefined): Promise<void> {
+    const attachments: ContentPart[] = [];
+    toolsBy = by;
+    try {
+      for (const call of calls) {
+        const out = await executeTool(call);
+        record({ role: "tool", tool_call_id: call.id, content: out.content });
+        attachments.push(...out.attachments);
+        if (signal.aborted) return;
+      }
+    } finally {
+      toolsBy = undefined;
+    }
+    if (attachments.length) {
+      record({ role: "user", content: [{ type: "text", text: strings.attachmentsNote }, ...attachments], ephemeral: true });
+    }
+  }
+
+  async function loop(signal: AbortSignal): Promise<"done" | "capped"> {
+    for (let round = 0; round < maxRounds; round++) {
+      const reply = await options.transport.complete(requestFor(), { signal });
+      if (signal.aborted) return "done";
+      record({
+        role: "assistant",
+        content: reply.content || null,
+        ...(reply.wireToolCalls.length && { tool_calls: reply.wireToolCalls }),
+      });
+      if (reply.content) push("assistant", reply.content, reply.model);
+      if (reply.toolCalls.length === 0) return "done";
+
+      set({ status: "acting" });
+      await runTools(reply.toolCalls, signal, reply.model);
+      if (signal.aborted) return "done";
+      set({ status: "thinking" });
+    }
+    return "capped";
+  }
+
   async function send(text: string): Promise<void> {
     const trimmed = text.trim();
     if (!trimmed) return;
@@ -267,60 +318,18 @@ export function createPilot(options: PilotOptions): Pilot {
     await ready;
     const run = new AbortController();
     abort = run;
-    const { signal } = run;
     push("user", trimmed);
     history = stripEphemeralMedia(history, strings.screenshotOmitted);
     record({ role: "user", content: trimmed });
     set({ status: "thinking", error: manifestError });
 
     try {
-      let round = 0;
-      for (; round < maxRounds; round++) {
-        const ctx = promptContext();
-        const serverMode = options.prompt === "server";
-        const system: ChatMessage[] = serverMode ? [] : [{ role: "system", content: buildSystemPrompt(ctx, promptOptions()) }];
-        const userId = typeof ctx.user?.["id"] === "string" ? ctx.user["id"] : undefined;
-        const reply = await options.transport.complete(
-          {
-            messages: [...system, ...trim(history, maxHistory)],
-            tools: buildToolSpecs(tools(), state.enabledTools),
-            ...(userId && { userId }),
-            ...(serverMode && { context: ctx }),
-          },
-          { signal },
-        );
-        if (signal.aborted) return;
-        answering = reply.model;
-
-        record({
-          role: "assistant",
-          content: reply.content || null,
-          ...(reply.wireToolCalls.length && { tool_calls: reply.wireToolCalls }),
-        });
-        if (reply.content) push("assistant", reply.content);
-        if (reply.toolCalls.length === 0) break;
-
-        set({ status: "acting" });
-        const attachments: ContentPart[] = [];
-        for (const call of reply.toolCalls) {
-          const out = await executeTool(call);
-          record({ role: "tool", tool_call_id: call.id, content: out.content });
-          attachments.push(...out.attachments);
-          if (signal.aborted) return;
-        }
-        if (attachments.length) {
-          record({ role: "user", content: [{ type: "text", text: strings.attachmentsNote }, ...attachments], ephemeral: true });
-        }
-        answering = undefined;
-        set({ status: "thinking" });
-      }
-      if (round === maxRounds) push("activity", strings.activity.stoppedAfter(maxRounds));
+      if ((await loop(run.signal)) === "capped") push("activity", strings.activity.stoppedAfter(maxRounds));
     } catch (err) {
-      if (!signal.aborted) set({ error: err instanceof Error ? err.message : String(err) });
+      if (!run.signal.aborted) set({ error: err instanceof Error ? err.message : String(err) });
     } finally {
       if (abort === null || abort === run) {
         abort = null;
-        answering = undefined;
         set({ status: "idle" });
         const next = queued;
         queued = null;
