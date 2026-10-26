@@ -52,6 +52,9 @@ export function frameElements(vp: Viewport, root?: ParentNode): FrameElement[] {
   });
 }
 
+// Innermost box wins — a card's button over the card itself.
+const innermost = (hits: FrameElement[]): FrameElement => hits.reduce((best, e) => (best.el.contains(e.el) ? e : best));
+
 /** The marked element under a normalized point, or null when nothing opted-in is there. */
 export function elementAt(x: number, y: number, vp: Viewport, root?: ParentNode): FrameElement | null {
   const px = ((x + 0.5) / (COORD_MAX + 1)) * vp.w;
@@ -62,8 +65,12 @@ export function elementAt(x: number, y: number, vp: Viewport, root?: ParentNode)
     return px >= r.left && px <= r.right && py >= r.top && py <= r.bottom;
   });
   if (hits.length === 0) return null;
-  // Innermost box wins — a card's button over the card itself.
-  return hits.reduce((best, e) => (best.el.contains(e.el) ? e : best));
+  const stack = typeof document.elementsFromPoint === "function" ? document.elementsFromPoint(px, py) : [];
+  for (const node of stack) {
+    const covering = hits.filter((e) => e.el.contains(node));
+    if (covering.length > 0) return innermost(covering);
+  }
+  return innermost(hits);
 }
 
 export interface SchematicOptions {
