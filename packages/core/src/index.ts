@@ -2,6 +2,7 @@ export * from "./attrs";
 export * from "./dom";
 export * from "./events";
 export * from "./actions";
+export * from "./seen";
 export * from "./tools";
 export * from "./strings";
 export * from "./manifest";

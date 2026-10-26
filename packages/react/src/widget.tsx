@@ -1,5 +1,5 @@
 import { markPanel } from "@sitepilot/core";
-import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { Fragment, useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { renderMarkdown } from "./markdown";
 import { usePilot, useSitepilot } from "./provider";
 
@@ -32,6 +32,7 @@ const CSS = `
 .sp-icon{display:grid;place-items:center;width:32px;height:32px;border:0;border-radius:50%;background:transparent;color:var(--sp-muted);cursor:pointer;flex:none}
 .sp-icon:hover{background:var(--sp-bubble);color:var(--sp-fg)}
 .sp-icon svg{width:16px;height:16px}
+.sp-icon.is-on{background:color-mix(in srgb,var(--sp-accent) 12%,transparent);color:var(--sp-accent)}
 .sp-tools{display:flex;flex-wrap:wrap;gap:6px;padding:10px 14px 0}
 .sp-chip{display:inline-flex;align-items:center;gap:5px;padding:3px 10px;border-radius:999px;border:1px solid var(--sp-border);background:transparent;color:var(--sp-muted);font:inherit;font-size:12px;cursor:pointer;line-height:1.4}
 .sp-chip.is-on{border-color:var(--sp-accent);color:var(--sp-accent);background:color-mix(in srgb,var(--sp-accent) 10%,transparent)}
@@ -47,6 +48,8 @@ const CSS = `
 .sp-assistant{align-self:flex-start;background:var(--sp-bubble);border-bottom-left-radius:5px}
 .sp-activity{align-self:flex-start;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--sp-muted);padding:0 4px;margin:-4px 0}
 .sp-activity svg{width:13px;height:13px;flex:none;color:var(--sp-accent)}
+.sp-by{align-self:flex-start;font-size:11px;color:var(--sp-muted);margin:-6px 0 0 4px}
+.sp-by b{font-weight:600;color:var(--sp-accent)}
 .sp-typing{align-self:flex-start;display:flex;gap:4px;padding:11px 14px;border-radius:16px;border-bottom-left-radius:5px;background:var(--sp-bubble)}
 .sp-dot{width:6px;height:6px;border-radius:50%;background:var(--sp-muted);animation:sp-bounce 1.2s infinite ease-in-out}
 .sp-dot:nth-child(2){animation-delay:.15s}.sp-dot:nth-child(3){animation-delay:.3s}
@@ -100,6 +103,12 @@ const Icon = {
       <path d="M5 12l5 5L20 7" />
     </svg>
   ),
+  eye: (
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  ),
   bolt: (
     <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
       <path d="M13 2L4 14h6l-1 8 9-12h-6l1-8z" />
@@ -116,7 +125,7 @@ const TOOL_LABELS: Record<string, string> = {
 
 export interface SitepilotWidgetProps {
   title?: string;
-  /** Small line under the title when idle. Default "Ready". */
+  /** Small line under the title when idle. Default "Ready"; empty hides it. */
   subtitle?: string;
   placeholder?: string;
   /** Shown before the first message; a blank line splits it into heading and body. */
@@ -124,6 +133,10 @@ export interface SitepilotWidgetProps {
   defaultOpen?: boolean;
   /** Show the per-tool consent chips. Default true. */
   showToolToggles?: boolean;
+  /** Show the header button that outlines what the AI is sent from this page. Default true. */
+  showSeenToggle?: boolean;
+  /** How the eye view names who answered a message, from the completion's `model`. Default: the model name. */
+  modelLabel?: (model: string) => ReactNode;
   /** Labels for the consent chips, by tool name. Merged over the built-in labels. */
   toolLabels?: Record<string, string>;
   /** Rendered under the composer, e.g. a "Powered by" line. */
@@ -139,6 +152,8 @@ export function SitepilotWidget({
   welcome = "Hi! Ask me where anything is on this page and I can point at it, or do it for you.",
   defaultOpen = false,
   showToolToggles = true,
+  showSeenToggle = true,
+  modelLabel = (model) => model,
   toolLabels,
   footer,
   icon,
@@ -148,12 +163,14 @@ export function SitepilotWidget({
   const [open, setOpen] = useState(defaultOpen);
   const [closing, setClosing] = useState(false);
   const [draft, setDraft] = useState("");
+  const [seeing, setSeeing] = useState(false);
   const logRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const labels = { ...TOOL_LABELS, ...toolLabels };
   const busy = status !== "idle";
 
   useEffect(ensureStyles, []);
+  useEffect(() => (seeing ? pilot.showSeen() : undefined), [seeing, pilot]);
   useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight });
   }, [messages, status]);
@@ -194,11 +211,25 @@ export function SitepilotWidget({
             <div className="sp-avatar">{icon ?? Icon.spark}</div>
             <div className="sp-titles">
               <div className="sp-title">{title}</div>
-              <div className={busy ? "sp-sub is-busy" : "sp-sub"}>
-                <i aria-hidden="true" />
-                {status === "thinking" ? "Thinking…" : status === "acting" ? "Working on the page…" : subtitle}
-              </div>
+              {(busy || subtitle) && (
+                <div className={busy ? "sp-sub is-busy" : "sp-sub"}>
+                  <i aria-hidden="true" />
+                  {status === "thinking" ? "Thinking…" : status === "acting" ? "Working on the page…" : subtitle}
+                </div>
+              )}
             </div>
+            {showSeenToggle && (
+              <button
+                type="button"
+                className={seeing ? "sp-icon is-on" : "sp-icon"}
+                title="What the AI sees"
+                aria-label="What the AI sees"
+                aria-pressed={seeing}
+                onClick={() => setSeeing(!seeing)}
+              >
+                {Icon.eye}
+              </button>
+            )}
             <button type="button" className="sp-icon" title="New conversation" aria-label="New conversation" onClick={reset}>
               {Icon.reset}
             </button>
@@ -235,18 +266,21 @@ export function SitepilotWidget({
                 {welcomeRest.length > 0 ? welcomeRest.join("\n\n") : welcomeHead}
               </div>
             )}
-            {messages.map((m) =>
-              m.role === "activity" ? (
-                <div key={m.id} className="sp-activity">
-                  {Icon.bolt}
-                  {m.content}
-                </div>
-              ) : (
-                <div key={m.id} className={`sp-msg sp-${m.role}`}>
-                  {m.role === "assistant" ? renderMarkdown(m.content) : <p>{m.content}</p>}
-                </div>
-              ),
-            )}
+            {messages.map((m) => (
+              <Fragment key={m.id}>
+                {m.role === "activity" ? (
+                  <div className="sp-activity">
+                    {Icon.bolt}
+                    {m.content}
+                  </div>
+                ) : (
+                  <div className={`sp-msg sp-${m.role}`}>
+                    {m.role === "assistant" ? renderMarkdown(m.content) : <p>{m.content}</p>}
+                  </div>
+                )}
+                {seeing && m.by && <div className="sp-by">{modelLabel(m.by)}</div>}
+              </Fragment>
+            ))}
             {busy && (
               <div className="sp-typing" aria-label={status === "thinking" ? "Thinking" : "Working"}>
                 <span className="sp-dot" />

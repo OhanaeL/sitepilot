@@ -1,8 +1,9 @@
 import { clearHighlight } from "./actions";
 import { ACTION_TOOLS, resolveBuiltinTools, type ActionToolName, type BuiltinToolsOption } from "./builtin-tools";
 import { scanAmbient, scanContext, type ScanOptions } from "./dom";
+import { showSeen } from "./seen";
 import { getEvents, installEventsBuffer } from "./events";
-import { buildSystemPrompt, type Hints, type PromptContext, type PromptOptions, type ScreenContext } from "./prompt";
+import { buildSystemPrompt, DEFAULT_MAX_EMBEDDED, type Hints, type PromptContext, type PromptOptions, type ScreenContext } from "./prompt";
 import { getManifest, loadManifest, setManifest, type PilotManifest } from "./manifest";
 import { mergeStrings, type PilotStrings, type PilotStringsOverride } from "./strings";
 import {
@@ -70,6 +71,8 @@ export interface PilotMessage {
   id: string;
   role: "user" | "assistant" | "activity";
   content: string;
+  /** The model whose round produced it (the completion's `model`), when the transport reported one. */
+  by?: string;
 }
 
 export interface PilotState {
@@ -97,6 +100,8 @@ export interface Pilot {
   /** Replace the wire history and rebuild the transcript from its user/assistant text. */
   loadHistory(history: ChatMessage[]): void;
   collectScreen(): ScreenContext;
+  /** Outline what the model is sent, using this pilot's scan options and tool consent. Returns the remover. */
+  showSeen(): () => void;
   strings: PilotStrings;
 }
 
@@ -192,8 +197,9 @@ export function createPilot(options: PilotOptions): Pilot {
     state = { ...state, ...patch };
     for (const l of listeners) l();
   };
+  let answering: string | undefined;
   const push = (role: PilotMessage["role"], content: string): void =>
-    set({ messages: [...state.messages, { id: newId(), role, content }] });
+    set({ messages: [...state.messages, { id: newId(), role, content, ...(role !== "user" && answering && { by: answering }) }] });
   const record = (entry: HistoryEntry): void => {
     history.push(entry);
     options.history?.onChange?.(history.map(({ ephemeral: _, ...m }) => m as ChatMessage));
@@ -283,6 +289,7 @@ export function createPilot(options: PilotOptions): Pilot {
           { signal },
         );
         if (signal.aborted) return;
+        answering = reply.model;
 
         record({
           role: "assistant",
@@ -303,6 +310,7 @@ export function createPilot(options: PilotOptions): Pilot {
         if (attachments.length) {
           record({ role: "user", content: [{ type: "text", text: strings.attachmentsNote }, ...attachments], ephemeral: true });
         }
+        answering = undefined;
         set({ status: "thinking" });
       }
       if (round === maxRounds) push("activity", strings.activity.stoppedAfter(maxRounds));
@@ -310,6 +318,7 @@ export function createPilot(options: PilotOptions): Pilot {
       if (!signal.aborted) set({ error: err instanceof Error ? err.message : String(err) });
     } finally {
       abort = null;
+      answering = undefined;
       set({ status: "idle" });
       const next = queued;
       queued = null;
@@ -351,6 +360,12 @@ export function createPilot(options: PilotOptions): Pilot {
       set({ messages: transcriptOf(history) });
     },
     collectScreen,
+    showSeen: () =>
+      showSeen({
+        scan: options.scan,
+        items: () => state.enabledTools.length > 0,
+        embedded: options.promptOptions?.maxEmbeddedElements ?? DEFAULT_MAX_EMBEDDED,
+      }),
     strings,
     ready,
   };

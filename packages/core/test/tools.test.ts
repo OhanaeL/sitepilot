@@ -72,6 +72,11 @@ describe("parseCompletion", () => {
     expect(reply.toolCalls).toEqual([{ id: "c1", name: "click_element", args: { target: "Save button" } }]);
   });
 
+  test("keeps the completion's model so the transcript can say who answered", () => {
+    expect(parseCompletion({ model: "jev", choices: [{ message: { content: "Hi" } }] }).model).toBe("jev");
+    expect(parseCompletion({ choices: [{ message: { content: "Hi" } }] })).not.toHaveProperty("model");
+  });
+
   test("throws on an error body", () => {
     expect(() => parseCompletion({ error: { message: "bad key" } })).toThrow("bad key");
   });
