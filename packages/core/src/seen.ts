@@ -149,13 +149,17 @@ function hatch(box: Rect): HTMLElement {
   return n;
 }
 
+let hideCurrent: (() => void) | null = null;
+
 /**
  * Outline every element the model is sent, on the element itself so the page's
  * own layers cover it; hatched red on top where the model sees what the user
- * can't. Returns a function that removes it.
+ * can't. Returns a function that removes it. One view at a time: a new call
+ * removes the previous one.
  */
 export function showSeen(opts: ShowSeenOptions = {}): () => void {
   if (typeof document === "undefined") return () => {};
+  hideCurrent?.();
   const root = document.createElement("div");
   root.setAttribute(ROOT_ATTR, "");
   root.setAttribute("aria-hidden", "true");
@@ -179,21 +183,21 @@ export function showSeen(opts: ShowSeenOptions = {}): () => void {
       saved.delete(el);
     }
     root.replaceChildren(...seen.filter((e) => e.sighting === "hidden").map((e) => hatch(e.box)));
+    observer.takeRecords();
   };
   const schedule = () => {
     pending ??= setTimeout(draw, REFRESH_MS);
   };
-  const ownStyle = (m: MutationRecord) => m.attributeName === "style" && saved.has(m.target as HTMLElement);
-  const observer = new MutationObserver((records) => {
-    if (!records.every(ownStyle)) schedule();
-  });
+  const observer = new MutationObserver(schedule);
 
   window.addEventListener("scroll", schedule, { capture: true, passive: true });
   window.addEventListener("resize", schedule);
   observer.observe(document.body, { subtree: true, childList: true, attributes: true, characterData: true });
   draw();
 
-  return () => {
+  const hide = () => {
+    if (hideCurrent !== hide) return;
+    hideCurrent = null;
     if (pending) clearTimeout(pending);
     window.removeEventListener("scroll", schedule, { capture: true });
     window.removeEventListener("resize", schedule);
@@ -202,4 +206,6 @@ export function showSeen(opts: ShowSeenOptions = {}): () => void {
     saved.clear();
     root.remove();
   };
+  hideCurrent = hide;
+  return hide;
 }

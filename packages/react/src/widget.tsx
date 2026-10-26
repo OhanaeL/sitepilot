@@ -140,7 +140,7 @@ export function SitepilotWidget({
   const busy = status !== "idle";
 
   useEffect(ensureStyles, []);
-  useEffect(() => (seeing ? pilot.showSeen() : undefined), [seeing, pilot]);
+  useEffect(() => (seeing && open ? pilot.showSeen() : undefined), [seeing, open, pilot]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: scroll to the bottom whenever a message or the typing indicator appears
   useEffect(() => {
     logRef.current?.scrollTo({ top: logRef.current.scrollHeight });

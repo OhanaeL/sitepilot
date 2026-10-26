@@ -136,4 +136,31 @@ describe("showSeen", () => {
     expect(byId("a").style.getPropertyValue("outline-width")).toBe("1px");
     expect(byId("c").style.getPropertyValue("outline-style")).toBe("");
   });
+
+  test("a second view replaces the first, and the page is restored whichever is hidden first", () => {
+    document.body.innerHTML = `<button id="a" data-pilot="Save" style="color: red"></button>`;
+    at(byId("a"), 100, 100, 200, 40);
+    hits = () => [byId("a")];
+    const first = showSeen();
+    const second = showSeen();
+    expect(document.querySelectorAll("[data-sitepilot-seen]")).toHaveLength(1);
+    first();
+    expect(byId("a").style.getPropertyValue("outline-style")).toBe("solid");
+    second();
+    expect(byId("a").style.getPropertyValue("outline-style")).toBe("");
+    expect(byId("a").style.getPropertyValue("color")).toBe("red");
+  });
+
+  test("redraws when the page changes an outlined element's inline style", async () => {
+    document.body.innerHTML = `<button id="a" data-pilot="Save"></button>`;
+    at(byId("a"), 100, 100, 200, 40);
+    hits = () => [byId("a")];
+    const hide = showSeen();
+    expect(byId("a").style.getPropertyValue("outline-style")).toBe("solid");
+    at(byId("a"), 100, 5000, 200, 40);
+    byId("a").style.setProperty("transform", "translateY(4900px)");
+    await new Promise((r) => setTimeout(r, 150));
+    expect(byId("a").style.getPropertyValue("outline-style")).toBe("");
+    hide();
+  });
 });
