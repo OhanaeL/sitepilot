@@ -16,6 +16,7 @@ bun install
 bun run build
 bun run test        # bun:test + happy-dom, preload in test/setup.ts (stubs getBoundingClientRect/scrollIntoView/ResizeObserver)
 bun run typecheck
+bun run lint        # biome ci: format + lint check, as CI runs it; `bun run format` fixes
 bun run dev:example
 ```
 

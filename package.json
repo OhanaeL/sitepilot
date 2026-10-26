@@ -8,6 +8,8 @@
   "scripts": {
     "build": "bun run --filter './packages/*' build",
     "typecheck": "bun run --filter './packages/*' --filter './examples/*' typecheck",
+    "lint": "biome ci .",
+    "format": "biome check --write .",
     "test": "bun test --conditions=@sitepilot/source",
     "dev:example": "bun run --filter sitepilot-example-vite-react dev"
   },
