@@ -267,23 +267,28 @@ export function createPilotHandler(options: PilotHandlerOptions): (req: Request)
     };
 
     if (options.router) {
-      const decision = await options.router({
-        messages: messages as Json[],
-        tools: tools as Json[],
-        context: ctx && {
-          ...ctx,
-          screen: {
-            ...ctx.screen,
-            ambient: ctx.screen.ambient.map((e) => {
-              const { hint: _, ...rest } = e;
-              const hint = hintFor(e, promptOptions.hints);
-              return { ...rest, ...(hint && { hint }) };
-            }),
+      let decision: RouteDecision | null = null;
+      try {
+        decision = await options.router({
+          messages: messages as Json[],
+          tools: tools as Json[],
+          context: ctx && {
+            ...ctx,
+            screen: {
+              ...ctx.screen,
+              ambient: ctx.screen.ambient.map((e) => {
+                const { hint: _, ...rest } = e;
+                const hint = hintFor(e, promptOptions.hints);
+                return { ...rest, ...(hint && { hint }) };
+              }),
+            },
           },
-        },
-        signal: req.signal,
-      });
-      if (decision.route === "self") return json(200, completionOf(decision));
+          signal: req.signal,
+        });
+      } catch {
+        decision = null;
+      }
+      if (decision?.route === "self") return json(200, completionOf(decision));
     }
 
     const system: Json[] = [];

@@ -83,6 +83,21 @@ describe("createPilotHandler", () => {
     expect(up.calls).toHaveLength(0);
   });
 
+  test("a router that throws hands the round to the LLM", async () => {
+    const up = upstream();
+    const handler = createPilotHandler({
+      apiKey: "k",
+      model: "m",
+      fetch: up.fetch,
+      router: () => {
+        throw new Error("boom");
+      },
+    });
+    const res = await handler(post({ messages: [{ role: "user", content: "hi" }] }));
+    expect(res.status).toBe(200);
+    expect(up.calls).toHaveLength(1);
+  });
+
   test("passes upstream errors through with their status", async () => {
     const fetch = (async () => new Response(JSON.stringify({ error: { message: "quota" } }), { status: 429 })) as unknown as typeof fetch;
     const handler = createPilotHandler({ apiKey: "k", model: "m", fetch });

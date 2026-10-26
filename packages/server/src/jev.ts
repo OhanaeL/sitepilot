@@ -288,7 +288,10 @@ export function jevRouter(options: JevRouterOptions): PilotRouter {
         signal,
       });
       if (!res.ok) throw new Error(`TypeSafe returned ${res.status}: ${(await res.text()).slice(0, 200)}`);
-      ({ answers, model } = (await res.json()) as { answers: Record<string, JevAnswer>; model: string });
+      const body = (await res.json()) as { answers?: unknown; model?: unknown };
+      if (!body.answers || typeof body.answers !== "object") throw new Error("TypeSafe returned no answers");
+      answers = body.answers as Record<string, JevAnswer>;
+      model = typeof body.model === "string" ? body.model : "jev";
     } catch (error) {
       return llm("error", { error });
     }

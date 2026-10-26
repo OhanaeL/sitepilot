@@ -210,6 +210,15 @@ describe("jevRouter", () => {
     expect(events[0]!.reason).toBe("error");
   });
 
+  test("falls through to the LLM when Jev answers without answers", async () => {
+    const s = stack(new Response(JSON.stringify({ model: "jev" }), { status: 200 }));
+    const events: JevRouteEvent[] = [];
+    const res = await handlerFor(s, events)(post([{ role: "user", content: "open settings" }]));
+    expect(res.status).toBe(200);
+    expect(s.llm).toHaveLength(1);
+    expect(events[0]!.reason).toBe("error");
+  });
+
   test("without a screen context there is nothing for Jev to target", async () => {
     const s = stack({ self: noul(1), tool: choice("click_element", 1), target: choice("Settings nav link", 1) });
     await handlerFor(s)(post([{ role: "user", content: "open settings" }], { sitepilot: undefined }));
