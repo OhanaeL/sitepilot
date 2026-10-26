@@ -7,4 +7,5 @@ export default defineConfig({
   clean: true,
   sourcemap: true,
   external: ["react", "react/jsx-runtime"],
+  loader: { ".css": "text" },
 });
