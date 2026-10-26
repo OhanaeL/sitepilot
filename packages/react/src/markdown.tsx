@@ -1,6 +1,6 @@
 import { Fragment, type ReactNode } from "react";
 
-const INLINE = /(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\((?:https?:\/\/|mailto:|\/(?!\/))[^)\s]+\)|\*[^*\n]+\*)/g;
+const INLINE = /(\*\*[^*]+\*\*|`[^`]+`|\[[^\]]+\]\((?:https?:\/\/|mailto:|\/(?![/\\]))[^)\s\\]+\)|\*[^*\n]+\*)/g;
 
 function inline(text: string, keyBase: string): ReactNode[] {
   return text.split(INLINE).map((part, i) => {
