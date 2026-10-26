@@ -132,12 +132,19 @@ function toScreenElement({ el, label, tier, key, hint: rawHint, read }: Candidat
   return { key, description: value ? `${label}: “${value}”` : label, tier, ...(hint && { hint }) };
 }
 
-function scanTier(tier: Tier, opts: ScanOptions): ScreenElement[] {
+function scanTier(tier: Tier, opts: ScanOptions): ScannedElement[] {
   if (typeof document === "undefined") return [];
   const root = opts.root ?? document;
   return withKeys(candidates(root, [tier]))
-    .map(toScreenElement)
-    .slice(0, opts.maxElements ?? DEFAULT_MAX_ELEMENTS);
+    .slice(0, opts.maxElements ?? DEFAULT_MAX_ELEMENTS)
+    .map((c) => ({ ...toScreenElement(c), el: c.el }));
+}
+
+const withoutNode = ({ el: _, ...e }: ScannedElement): ScreenElement => e;
+
+/** Each tier exactly as the model receives it (same keys, same cap), with the nodes. */
+export function scanTiers(opts: ScanOptions = {}): Record<Tier, ScannedElement[]> {
+  return { ambient: scanTier("ambient", opts), item: scanTier("item", opts) };
 }
 
 /** Both tiers in the one key namespace the model sees, with their nodes. Uncapped. */
@@ -148,12 +155,12 @@ export function scanAll(root?: ParentNode): ScannedElement[] {
 
 /** Every visible `data-pilot` element — the baseline "what the user sees" sent each turn. */
 export function scanAmbient(opts: ScanOptions = {}): ScreenElement[] {
-  return scanTier("ambient", opts);
+  return scanTier("ambient", opts).map(withoutNode);
 }
 
 /** Every visible `data-pilot-item` element — pulled only when the model asks to look closer. */
 export function scanItems(opts: ScanOptions = {}): ScreenElement[] {
-  return scanTier("item", opts);
+  return scanTier("item", opts).map(withoutNode);
 }
 
 // The marker itself is usually a visually-hidden span carrying its own

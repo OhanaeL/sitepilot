@@ -29,6 +29,8 @@ export interface CompletionReply {
   content: string;
   toolCalls: ToolCall[];
   wireToolCalls: WireToolCall[];
+  /** The completion's `model`: who answered this round. */
+  model?: string;
 }
 
 /** The seam between the browser loop and whatever answers it. */
@@ -45,6 +47,7 @@ export interface OpenAITransportOptions {
 }
 
 interface CompletionJson {
+  model?: unknown;
   choices?: Array<{ message?: { content?: string | null; tool_calls?: WireToolCall[] } }>;
   error?: { message?: string } | string;
 }
@@ -58,6 +61,7 @@ export function parseCompletion(json: CompletionJson): CompletionReply {
   const wireToolCalls = (message.tool_calls ?? []).filter((c) => c?.id && c.function?.name);
   return {
     content: message.content ?? "",
+    ...(typeof json.model === "string" && json.model && { model: json.model }),
     wireToolCalls,
     toolCalls: wireToolCalls.map((c) => ({
       id: c.id,

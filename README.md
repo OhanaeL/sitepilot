@@ -160,6 +160,10 @@ Built-in tools (each is a **consent switch** the user can flip in the widget):
 | `fill_field` | Sets the value through the native setter + `input` event, so React/Vue controlled inputs update. |
 | `get_screen_elements` | Look closer: returns the `item` tier. Rides along whenever any action is enabled. |
 
+### What the AI sees
+
+The widget's eye button (`showSeenToggle`, on by default) outlines every element the model is sent, from the same scan, keys and cap as the prompt: solid for the `ambient` tier sent every message, dashed for the `item` tier it can pull on request (only while an action is enabled). The outline is set on the element itself, so the page's own layers cover it. Where the model is sent an element the user can't see (covered by another layer, clipped by a scrolling container, or transparent), a hatched red box is drawn on top instead. Elements past `scan.maxElements` (default 20) get no outline, because the model never receives them. Headless: `const hide = pilot.showSeen()`.
+
 ## Computer-use plugin (`@sitepilot/computer`)
 
 Modelled on Anthropic-style computer use, with one difference: **the frame never contains anything you didn't opt in.**

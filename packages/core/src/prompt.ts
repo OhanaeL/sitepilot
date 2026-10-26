@@ -52,7 +52,7 @@ Rules:
 - If the element you need is not on screen, say so and explain where the user can find it instead of guessing.
 - Keep replies short and conversational.`;
 
-const DEFAULT_MAX_EMBEDDED = 40;
+export const DEFAULT_MAX_EMBEDDED = 40;
 
 const baseLabel = (key: string): string => key.replace(/ #\d+$/, "");
 

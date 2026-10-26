@@ -62,6 +62,21 @@ describe("createPilot", () => {
     );
   });
 
+  test("tags replies and their tool activity with the model of that round, never the user's turn", async () => {
+    document.body.innerHTML = `<button data-pilot="Save button"></button>`;
+    const transport = scripted([
+      { ...call("click_element", { target: "Save button" }), model: "jev" },
+      { content: "Saved.", model: "gemini-3.7-flash" },
+    ]);
+    const pilot = createPilot({ transport });
+    await pilot.send("save it");
+    expect(pilot.getState().messages.map((m) => [m.role, m.by])).toEqual([
+      ["user", undefined],
+      ["activity", "jev"],
+      ["assistant", "gemini-3.7-flash"],
+    ]);
+  });
+
   test("fill updates a controlled-style input and dispatches input", async () => {
     document.body.innerHTML = `<input data-pilot="Name field">`;
     const input = document.querySelector("input")!;
