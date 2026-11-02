@@ -79,6 +79,23 @@ describe("parseCompletion", () => {
     expect(reply.toolCalls).toEqual([{ id: "c1", name: "click_element", args: { target: "Save button" } }]);
   });
 
+  test("keeps a tool call's provider extra_content so it goes back with the call", () => {
+    const signed = { google: { thought_signature: "sig-abc" } };
+    const reply = parseCompletion({
+      choices: [
+        {
+          message: {
+            content: null,
+            tool_calls: [
+              { id: "c1", type: "function", function: { name: "look", arguments: "{}" }, extra_content: signed },
+            ],
+          },
+        },
+      ],
+    });
+    expect(reply.wireToolCalls[0]!.extra_content).toEqual(signed);
+  });
+
   test("keeps the completion's model so the transcript can say who answered", () => {
     expect(parseCompletion({ model: "jev", choices: [{ message: { content: "Hi" } }] }).model).toBe("jev");
     expect(parseCompletion({ choices: [{ message: { content: "Hi" } }] })).not.toHaveProperty("model");
