@@ -86,6 +86,8 @@ describe("createPilotHandler", () => {
     const up = upstream();
     const handler = createPilotHandler({ apiKey: "k", model: "m", fetch: up.fetch });
     const signed = { google: { thought_signature: "sig-abc" } };
+    const atLimit = { p: "x".repeat(16 * 1024 - '{"p":""}'.length) };
+    const overLimit = { p: `${atLimit.p}x` };
     const call = (id: string, extra?: unknown) => ({
       id,
       type: "function",
@@ -104,6 +106,10 @@ describe("createPilotHandler", () => {
               call("b", "not-an-object"),
               call("c", { blob: "x".repeat(20_000) }),
               call("d"),
+              call("e", []),
+              call("f", null),
+              call("g", atLimit),
+              call("h", overLimit),
             ],
           },
           { role: "tool", tool_call_id: "a", content: "ok" },
@@ -113,8 +119,40 @@ describe("createPilotHandler", () => {
     const calls = (up.calls[0]!.body["messages"] as Array<Record<string, unknown>>)[1]!["tool_calls"] as Array<
       Record<string, unknown>
     >;
-    expect(calls[0]!["extra_content"]).toEqual(signed);
-    expect(calls.slice(1).map((c) => c["extra_content"])).toEqual([undefined, undefined, undefined]);
+    expect(Object.fromEntries(calls.map((c) => [c["id"], c["extra_content"]]))).toEqual({
+      a: signed,
+      b: undefined,
+      c: undefined,
+      d: undefined,
+      e: undefined,
+      f: undefined,
+      g: atLimit,
+      h: undefined,
+    });
+  });
+
+  test("JSON nested too deeply to re-serialise is refused or dropped, never thrown", async () => {
+    const up = upstream();
+    const handler = createPilotHandler({ apiKey: "k", model: "m", fetch: up.fetch });
+    const depth = 600_000;
+    const nested = `${'{"a":'.repeat(depth)}1${"}".repeat(depth)}`;
+    const user = '{"role":"user","content":"go"}';
+
+    const deepTool = await handler(
+      post(`{"messages":[${user}],"tools":[{"type":"function","function":{"name":"f","parameters":${nested}}}]}`),
+    );
+    expect(deepTool.status).toBe(400);
+    expect(up.calls.length).toBe(0);
+
+    const call = `{"id":"c1","type":"function","function":{"name":"f","arguments":"{}"},"extra_content":${nested}}`;
+    const deepExtra = await handler(
+      post(`{"messages":[${user},{"role":"assistant","content":null,"tool_calls":[${call}]}]}`),
+    );
+    expect(deepExtra.status).toBe(200);
+    const sent = (up.calls[0]!.body["messages"] as Array<Record<string, unknown>>)[1]!["tool_calls"] as Array<
+      Record<string, unknown>
+    >;
+    expect(sent[0]).not.toHaveProperty("extra_content");
   });
 
   test("rejects bad input before touching upstream", async () => {
