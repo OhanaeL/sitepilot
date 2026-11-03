@@ -126,6 +126,14 @@ function isPart(p: unknown): boolean {
   return false;
 }
 
+const MAX_EXTRA_BYTES = 16 * 1024;
+
+// Gemini rejects a replayed tool call whose `extra_content.google.thought_signature` is missing.
+function providerExtra(raw: unknown): Json | null {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
+  return JSON.stringify(raw).length <= MAX_EXTRA_BYTES ? (raw as Json) : null;
+}
+
 function cleanMessage(raw: unknown): Json | null {
   if (!raw || typeof raw !== "object") return null;
   const m = raw as Json;
@@ -154,7 +162,13 @@ function cleanMessage(raw: unknown): Json | null {
       out["tool_calls"] = calls.map((c) => {
         const call = c as Json;
         const fn = call["function"] as Json;
-        return { id: call["id"], type: "function", function: { name: fn["name"], arguments: fn["arguments"] } };
+        const extra = providerExtra(call["extra_content"]);
+        return {
+          id: call["id"],
+          type: "function",
+          function: { name: fn["name"], arguments: fn["arguments"] },
+          ...(extra && { extra_content: extra }),
+        };
       });
     }
   }

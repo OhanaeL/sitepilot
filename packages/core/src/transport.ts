@@ -5,6 +5,8 @@ export interface WireToolCall {
   id: string;
   type: "function";
   function: { name: string; arguments: string };
+  /** Provider metadata kept verbatim and sent back with the call, e.g. Gemini's thought signature. */
+  extra_content?: Record<string, unknown>;
 }
 
 export type ChatMessage =

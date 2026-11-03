@@ -82,6 +82,41 @@ describe("createPilotHandler", () => {
     ]);
   });
 
+  test("keeps a provider's per-call extra_content, dropping malformed or oversized values", async () => {
+    const up = upstream();
+    const handler = createPilotHandler({ apiKey: "k", model: "m", fetch: up.fetch });
+    const signed = { google: { thought_signature: "sig-abc" } };
+    const call = (id: string, extra?: unknown) => ({
+      id,
+      type: "function",
+      function: { name: "f", arguments: "{}" },
+      ...(extra !== undefined && { extra_content: extra }),
+    });
+    await handler(
+      post({
+        messages: [
+          { role: "user", content: "go" },
+          {
+            role: "assistant",
+            content: null,
+            tool_calls: [
+              call("a", signed),
+              call("b", "not-an-object"),
+              call("c", { blob: "x".repeat(20_000) }),
+              call("d"),
+            ],
+          },
+          { role: "tool", tool_call_id: "a", content: "ok" },
+        ],
+      }),
+    );
+    const calls = (up.calls[0]!.body["messages"] as Array<Record<string, unknown>>)[1]!["tool_calls"] as Array<
+      Record<string, unknown>
+    >;
+    expect(calls[0]!["extra_content"]).toEqual(signed);
+    expect(calls.slice(1).map((c) => c["extra_content"])).toEqual([undefined, undefined, undefined]);
+  });
+
   test("rejects bad input before touching upstream", async () => {
     const up = upstream();
     const handler = createPilotHandler({ apiKey: "k", model: "m", fetch: up.fetch, maxMessages: 2, maxBodyBytes: 200 });
