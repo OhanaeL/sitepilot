@@ -345,6 +345,7 @@ Everything sitepilot does runs in the browser; the only thing a static site can'
 ## Security notes
 
 - The proxy strips everything but `messages`, `tools` and `user`, pins `model`, caps message count and body size, and rejects `image_url` parts that are not `data:image/…` or `https://`. Cross-origin callers are refused unless listed in `allowOrigins` (which also answers preflights). Add your own auth/rate-limit in front of it — it is deliberately unopinionated about sessions.
+- A replayed tool call keeps its provider `extra_content` (a plain object of up to 16 KB, such as Gemini 3's thought signature, which Gemini requires back); anything else in it is dropped. Calls a `router` makes itself carry no signature, so with Gemini 3 a deployer whose LLM may take over the same turn adds Google's placeholder signature to those.
 - The browser builds the system prompt. That is by design (the DOM is there), and it is not a secret; the key is. `systemPrompt` on the server is prepended and cannot be removed by the client.
 - Consent is enforced twice: disabled tools are not advertised, and a call to one is refused even if the model invents it.
 

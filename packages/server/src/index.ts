@@ -131,7 +131,17 @@ const MAX_EXTRA_BYTES = 16 * 1024;
 // Gemini rejects a replayed tool call whose `extra_content.google.thought_signature` is missing.
 function providerExtra(raw: unknown): Json | null {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return null;
-  return JSON.stringify(raw).length <= MAX_EXTRA_BYTES ? (raw as Json) : null;
+  const size = jsonLength(raw);
+  return size !== null && size <= MAX_EXTRA_BYTES ? (raw as Json) : null;
+}
+
+// JSON.parse accepts nesting deep enough to overflow the stack when serialised again.
+function jsonLength(value: unknown): number | null {
+  try {
+    return JSON.stringify(value).length;
+  } catch {
+    return null;
+  }
 }
 
 function cleanMessage(raw: unknown): Json | null {
@@ -323,10 +333,9 @@ export function createPilotHandler(options: PilotHandlerOptions): (req: Request)
     if (ctx) system.push({ role: "system", content: buildSystemPrompt(ctx, promptOptions) });
     const user = isStr(body["user"]) ? body["user"].slice(0, 256) : undefined;
 
-    const upstream = await doFetch(`${baseURL}/chat/completions`, {
-      method: "POST",
-      headers: { "content-type": "application/json", authorization: `Bearer ${options.apiKey}` },
-      body: JSON.stringify({
+    let payload: string;
+    try {
+      payload = JSON.stringify({
         model: options.model,
         ...(options.temperature !== undefined && { temperature: options.temperature }),
         ...options.extraBody,
@@ -334,7 +343,15 @@ export function createPilotHandler(options: PilotHandlerOptions): (req: Request)
         ...(tools.length && { tools }),
         ...(user && { user }),
         stream: false,
-      }),
+      });
+    } catch {
+      return error(400, "request is nested too deeply");
+    }
+
+    const upstream = await doFetch(`${baseURL}/chat/completions`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${options.apiKey}` },
+      body: payload,
       signal: req.signal,
     });
 
